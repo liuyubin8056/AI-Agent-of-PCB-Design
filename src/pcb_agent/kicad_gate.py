@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -107,6 +108,8 @@ class KiCadGate:
         self.cli = self._locate()
 
     def _locate(self) -> str | None:
+        if not self.settings.kicad_enabled:
+            return None
         if self.settings.kicad_cli:
             path = Path(self.settings.kicad_cli)
             return str(path) if path.exists() else None
@@ -114,12 +117,69 @@ class KiCadGate:
             found = shutil.which(name)
             if found:
                 return found
-        # Windows 默认安装位置兜底
-        for base in (r"C:\Program Files\KiCad", r"C:\Program Files (x86)\KiCad"):
-            for ver in ("9.0", "8.0", "8.0.0"):
+        found = self._from_registry()
+        if found:
+            return found
+        # 常见自定义安装位置兜底（KiCad 允许装到任意盘符）
+        for base in ("C:/Program Files/KiCad", "C:/Program Files (x86)/KiCad",
+                     "D:/KiCad", "E:/KiCad", "F:/KiCad", "F:/KiCard"):
+            for ver in ("10.0", "9.0", "8.0"):
                 cand = Path(base) / ver / "bin" / "kicad-cli.exe"
                 if cand.exists():
                     return str(cand)
+            cand = Path(base) / "bin" / "kicad-cli.exe"
+            if cand.exists():
+                return str(cand)
+        return None
+
+    @staticmethod
+    def _from_registry() -> str | None:
+        """从 Windows 卸载注册表项里找 KiCad 的 InstallLocation。
+
+        KiCad 安装器不写 PATH，但一定会写 DisplayName / InstallLocation，
+        所以这是最可靠的自发现方式。
+        """
+        if os.name != "nt":
+            return None
+        try:
+            import winreg
+        except ImportError:  # pragma: no cover
+            return None
+
+        def value(key, name: str) -> str:
+            try:
+                return str(winreg.QueryValueEx(key, name)[0])
+            except OSError:
+                return ""
+
+        roots = (
+            (winreg.HKEY_LOCAL_MACHINE,
+             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (winreg.HKEY_LOCAL_MACHINE,
+             r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (winreg.HKEY_CURRENT_USER,
+             r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        )
+        for hive, subpath in roots:
+            try:
+                with winreg.OpenKey(hive, subpath) as root:
+                    count = winreg.QueryInfoKey(root)[0]
+                    for idx in range(count):
+                        try:
+                            sub = winreg.EnumKey(root, idx)
+                            with winreg.OpenKey(root, sub) as item:
+                                if "kicad" not in value(item, "DisplayName").lower():
+                                    continue
+                                location = value(item, "InstallLocation")
+                        except OSError:
+                            continue
+                        if not location:
+                            continue
+                        cand = Path(location) / "bin" / "kicad-cli.exe"
+                        if cand.exists():
+                            return str(cand)
+            except OSError:
+                continue
         return None
 
     @property
@@ -189,6 +249,12 @@ class KiCadGate:
                           artifacts={"report": str(out_path)})
 
 
+# 无头 ERC 只读全局符号库表，读不到工程目录里的 sym-lib-table，于是对每个
+# 自建符号都报一次「当前配置不包含符号库」。由于符号定义已随原理图内嵌在
+# lib_symbols 里（能正常渲染、网表也正确），这条属于环境噪声，不计入问题清单。
+_NOISE_TYPES = {"lib_symbol_issues"}
+
+
 def parse_erc_json(path: str | Path) -> list[Issue]:
     """宽容解析 ERC/DRC 的 JSON 报告：不同小版本字段略有差异。"""
     try:
@@ -204,11 +270,14 @@ def parse_erc_json(path: str | Path) -> list[Issue]:
                 for v in node["violations"]:
                     if not isinstance(v, dict):
                         continue
+                    vtype = str(v.get("type", "CHECK"))
+                    if vtype in _NOISE_TYPES:
+                        continue
                     sev = str(v.get("severity", "warning")).lower()
-                    desc = str(v.get("description") or v.get("message") or v.get("type") or "")
+                    desc = str(v.get("description") or v.get("message") or vtype)
                     issues.append(
                         Issue(
-                            f"KICAD_{str(v.get('type', 'CHECK')).upper()[:24]}",
+                            f"KICAD_{vtype.upper()[:24]}",
                             ERROR if sev == "error" else WARNING,
                             desc or "未提供描述",
                             str(node.get("path", "")),
@@ -236,7 +305,12 @@ def diff_with_ir(ir: DesignIR, netlist_path: str | Path) -> list[Issue]:
 
     issues: list[Issue] = []
     expected = {net.name: set(net.members) for net in ir.nets}
-    actual_sets = {name: set(members) for name, members in actual.items()}
+    # KiCad 会给每个悬空引脚自动生成一条 unconnected-(...) 网络，不算真网络
+    actual_sets = {
+        name: set(members)
+        for name, members in actual.items()
+        if not name.startswith("unconnected-")
+    }
 
     for name, members in expected.items():
         if name not in actual_sets:

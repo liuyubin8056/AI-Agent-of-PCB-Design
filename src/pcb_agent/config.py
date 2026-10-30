@@ -40,6 +40,7 @@ class Settings:
     offline: bool = True
     max_rounds: int = 3
     kicad_cli: str = ""
+    kicad_enabled: bool = True
     timeout: int = 120
 
     @classmethod
@@ -57,6 +58,7 @@ class Settings:
             offline=offline or not api_key,
             max_rounds=int(os.environ.get("PCB_MAX_ROUNDS", "3") or "3"),
             kicad_cli=os.environ.get("KICAD_CLI", "").strip(),
+            kicad_enabled=_as_bool(os.environ.get("PCB_KICAD"), default=True),
             timeout=int(os.environ.get("PCB_LLM_TIMEOUT", "120") or "120"),
         )
 
