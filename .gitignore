@@ -1,0 +1,36 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+
+# ---- 密钥与本地配置 ----
+.env
+.env.local
+
+# ---- 运行时产物 ----
+runs/
+*.log
+
+# ---- 编辑器 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- KiCad 备份与自动保存 ----
+*-backups/
+*.kicad_sch-bak
+*.kicad_pcb-bak
+*.lck
+_autosave-*
