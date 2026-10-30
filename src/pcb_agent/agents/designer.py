@@ -13,6 +13,7 @@ from .. import prompts
 from ..ir import BoardSpec, DesignIR, Issue
 from ..llm import LLMError
 from ..subcircuits import SUB_CIRCUITS, build_board
+from ..textutil import is_negated
 from .base import Agent
 
 
@@ -99,11 +100,15 @@ class DesignerAgent(Agent):
         blob = " ".join(
             [spec.title, spec.summary, " ".join(spec.functions), " ".join(spec.interfaces)]
         ).lower()
+
+        def want(*words: str) -> bool:
+            return any(w in blob and not is_negated(blob, w) for w in words)
+
         selections = [{"id": "mcu_min_system", "params": {}}]
         # 任何一块板都需要供电，默认上 5V 稳压
         selections.append({"id": "power_ldo5v", "params": {}})
-        if any(k in blob for k in ("led", "指示", "心跳")):
+        if want("led", "指示", "心跳"):
             selections.append({"id": "led_indicator", "params": {}})
-        if any(k in blob for k in ("i2c", "传感器", "sensor")):
+        if want("i2c", "传感器", "sensor"):
             selections.append({"id": "i2c_sensor", "params": {}})
         return selections

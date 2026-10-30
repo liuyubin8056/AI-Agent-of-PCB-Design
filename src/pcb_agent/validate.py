@@ -21,14 +21,22 @@ _I2C_NET_HINTS = ("SDA", "SCL")
 _FLOATING_SEVERITY = WARNING
 
 
+def _safe(call, *args, default: str = "") -> str:
+    """器件库里查不到时返回默认值，不让校验器因为坏 symbol 崩掉。"""
+    try:
+        return call(*args)
+    except KeyError:
+        return default
+
+
 def _pin_type(lib: Library, symbol: str, number: str) -> str:
-    pin = lib.pin(symbol, number)
-    return pin["type"] if pin else "unknown"
+    pin = _safe(lib.pin, symbol, number) if lib.has(symbol) else None
+    return pin["type"] if isinstance(pin, dict) else "unknown"
 
 
 def _pin_name(lib: Library, symbol: str, number: str) -> str:
-    pin = lib.pin(symbol, number)
-    return pin["name"] if pin else number
+    pin = _safe(lib.pin, symbol, number) if lib.has(symbol) else None
+    return pin["name"] if isinstance(pin, dict) else number
 
 
 def _split(member: str) -> tuple[str, str]:
@@ -78,9 +86,9 @@ class _Index:
         for member in self.net_members.get(net_name, []):
             ref, _ = _split(member)
             item = self.parts.get(ref)
-            if not item or self.lib.category(item.symbol) != "passive":
+            if not item or _safe(self.lib.category, item.symbol) != "passive":
                 continue
-            if self.lib.ref_prefix(item.symbol) != "R":
+            if _safe(self.lib.ref_prefix, item.symbol) != "R":
                 continue
             for peer, peer_nets in self.pin_nets.items():
                 if peer.startswith(ref + ".") and peer != member:
@@ -95,7 +103,7 @@ class _Index:
         for member in self.net_members.get(net_name, []):
             ref, _ = _split(member)
             item = self.parts.get(ref)
-            if not item or self.lib.ref_prefix(item.symbol) != "C":
+            if not item or _safe(self.lib.ref_prefix, item.symbol) != "C":
                 continue
             for peer, peer_nets in self.pin_nets.items():
                 if peer.startswith(ref + ".") and peer != member:
@@ -186,7 +194,8 @@ def check_power_rail_source(idx: _Index) -> list[Issue]:
         members = idx.net_members[name]
         has_source = any(idx.pin_type(m) == "power_out" for m in members)
         external = any(
-            idx.lib.category(idx.symbol_of(_split(m)[0])) == "connector" for m in members
+            _safe(idx.lib.category, idx.symbol_of(_split(m)[0])) == "connector"
+            for m in members
         )
         if has_source or external:
             continue
@@ -241,7 +250,7 @@ def check_reset_pullup(idx: _Index) -> list[Issue]:
 def check_crystal_load_caps(idx: _Index) -> list[Issue]:
     issues = []
     for item in idx.ir.bom:
-        if idx.lib.category(item.symbol) != "clock":
+        if _safe(idx.lib.category, item.symbol) != "clock":
             continue
         for pin in idx.lib.pins(item.symbol):
             member = f"{item.ref}.{pin['number']}"

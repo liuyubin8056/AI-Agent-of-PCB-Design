@@ -11,6 +11,7 @@ import json
 from .. import prompts
 from ..ir import BoardSpec
 from ..llm import LLMError
+from ..textutil import is_negated
 from .base import Agent
 
 _KEYWORD_MAP = (
@@ -61,13 +62,15 @@ class AnalystAgent(Agent):
         functions: list[str] = []
         interfaces: list[str] = []
         for key, desc in _KEYWORD_MAP:
-            if key in low and desc not in functions:
+            if key in low and desc not in functions and not is_negated(low, key):
                 functions.append(desc)
         if any(k in low for k in ("arduino", "最小系统", "单片机")):
             functions = [f for f in functions if f not in {"MCU 最小系统", "兼容 Arduino 的 MCU 最小系统"}]
             functions.insert(0, "兼容 Arduino 的 MCU 最小系统")
             interfaces.append("GPIO 排针")
-        if any(k in low for k in ("i2c", "传感器")):
+        if ("i2c" in low and not is_negated(low, "i2c")) or (
+            "传感器" in low and not is_negated(low, "传感器")
+        ):
             interfaces.append("I2C")
         if any(k in low for k in ("电源", "适配器", "12v", "供电")):
             functions.append("7~12V 输入稳压到 5V")
