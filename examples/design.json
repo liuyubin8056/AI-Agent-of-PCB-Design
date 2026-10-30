@@ -1,0 +1,304 @@
+{
+  "spec": {
+    "title": "Arduino 最小系统板",
+    "summary": "帮我设计一块 Arduino 最小系统板，带电源指示灯和一路 I2C 传感器接口，7~12V 供电",
+    "functions": [
+      "兼容 Arduino 的 MCU 最小系统",
+      "I2C 传感器接入",
+      "传感器接入",
+      "LED 状态指示",
+      "稳压供电",
+      "7~12V 输入稳压到 5V"
+    ],
+    "supply_rails": [
+      "+5V",
+      "GND"
+    ],
+    "interfaces": [
+      "GPIO 排针",
+      "I2C"
+    ],
+    "key_parts": [
+      "ATmega328P",
+      "AMS1117-5.0"
+    ],
+    "constraints": {
+      "供电": "7~12V 直流输入",
+      "尺寸": "约 60 x 40 mm"
+    }
+  },
+  "bom": [
+    {
+      "ref": "U1",
+      "symbol": "pcbagent:MCU_ATmega328P",
+      "value": "ATmega328P-PU",
+      "footprint": "Package_DIP:DIP-28_W7.62mm",
+      "role": "主控 MCU",
+      "note": "最小系统核心"
+    },
+    {
+      "ref": "C1",
+      "symbol": "pcbagent:CAP",
+      "value": "100nF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "VCC 去耦",
+      "note": "紧靠 U1 引脚 7"
+    },
+    {
+      "ref": "C2",
+      "symbol": "pcbagent:CAP",
+      "value": "100nF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "AVCC 去耦",
+      "note": "紧靠 U1 引脚 20"
+    },
+    {
+      "ref": "R1",
+      "symbol": "pcbagent:RES",
+      "value": "10k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "role": "复位上拉",
+      "note": "防止复位脚悬空误触发"
+    },
+    {
+      "ref": "SW1",
+      "symbol": "pcbagent:SW_PUSH",
+      "value": "SW_PUSH",
+      "footprint": "Button_Switch_SMD:SW_SPST_B3U-1000P",
+      "role": "复位按键",
+      "note": "按下拉低复位"
+    },
+    {
+      "ref": "Y1",
+      "symbol": "pcbagent:XTAL",
+      "value": "16MHz",
+      "footprint": "Crystal:Crystal_HC49-4H_Vertical",
+      "role": "时钟晶振",
+      "note": "时钟源"
+    },
+    {
+      "ref": "C3",
+      "symbol": "pcbagent:CAP",
+      "value": "22pF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "晶振负载电容",
+      "note": "与晶振匹配，典型 22pF"
+    },
+    {
+      "ref": "C4",
+      "symbol": "pcbagent:CAP",
+      "value": "22pF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "晶振负载电容",
+      "note": "与晶振匹配，典型 22pF"
+    },
+    {
+      "ref": "C5",
+      "symbol": "pcbagent:CAP",
+      "value": "100nF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "AREF 滤波",
+      "note": "稳定 ADC 参考"
+    },
+    {
+      "ref": "J1",
+      "symbol": "pcbagent:CONN_2",
+      "value": "Conn_01x02",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+      "role": "电源输入",
+      "note": "外接 7~12V 适配器"
+    },
+    {
+      "ref": "U2",
+      "symbol": "pcbagent:LDO_AMS1117_5V",
+      "value": "AMS1117-5.0",
+      "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
+      "role": "线性稳压",
+      "note": "7~12V 降至 5V"
+    },
+    {
+      "ref": "C6",
+      "symbol": "pcbagent:CAP",
+      "value": "10uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "输入滤波",
+      "note": "抑制上电冲击"
+    },
+    {
+      "ref": "C7",
+      "symbol": "pcbagent:CAP",
+      "value": "10uF",
+      "footprint": "Capacitor_SMD:C_0603_1608Metric",
+      "role": "输出滤波",
+      "note": "稳定 5V 输出"
+    },
+    {
+      "ref": "R2",
+      "symbol": "pcbagent:RES",
+      "value": "330",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "role": "LED 限流",
+      "note": "限制 LED 电流约 10mA"
+    },
+    {
+      "ref": "D1",
+      "symbol": "pcbagent:LED",
+      "value": "LED-Green",
+      "footprint": "LED_SMD:LED_0603_1608Metric",
+      "role": "状态指示灯",
+      "note": "心跳 / 状态指示"
+    },
+    {
+      "ref": "U3",
+      "symbol": "pcbagent:SENSOR_I2C",
+      "value": "I2C_SENSOR",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
+      "role": "I2C 传感器接口",
+      "note": "4 线模块接口"
+    },
+    {
+      "ref": "R3",
+      "symbol": "pcbagent:RES",
+      "value": "4.7k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "role": "SDA 上拉",
+      "note": "I2C 开漏必需"
+    },
+    {
+      "ref": "R4",
+      "symbol": "pcbagent:RES",
+      "value": "4.7k",
+      "footprint": "Resistor_SMD:R_0603_1608Metric",
+      "role": "SCL 上拉",
+      "note": "I2C 开漏必需"
+    }
+  ],
+  "nets": [
+    {
+      "name": "+5V",
+      "kind": "power",
+      "members": [
+        "U1.7",
+        "C1.1",
+        "U1.20",
+        "C2.1",
+        "R1.2",
+        "U2.2",
+        "C7.1",
+        "U3.1",
+        "R3.2",
+        "R4.2"
+      ]
+    },
+    {
+      "name": "VIN_RAW",
+      "kind": "power",
+      "members": [
+        "J1.1",
+        "U2.3",
+        "C6.1"
+      ]
+    },
+    {
+      "name": "GND",
+      "kind": "ground",
+      "members": [
+        "C1.2",
+        "U1.8",
+        "C2.2",
+        "U1.22",
+        "SW1.2",
+        "C3.2",
+        "C4.2",
+        "C5.2",
+        "J1.2",
+        "U2.1",
+        "C6.2",
+        "C7.2",
+        "D1.1",
+        "U3.2"
+      ]
+    },
+    {
+      "name": "AREF",
+      "kind": "signal",
+      "members": [
+        "U1.21",
+        "C5.1"
+      ]
+    },
+    {
+      "name": "LED_A",
+      "kind": "signal",
+      "members": [
+        "R2.2",
+        "D1.2"
+      ]
+    },
+    {
+      "name": "LED_CTRL",
+      "kind": "signal",
+      "members": [
+        "U1.13",
+        "R2.1"
+      ]
+    },
+    {
+      "name": "RESET",
+      "kind": "signal",
+      "members": [
+        "U1.1",
+        "R1.1",
+        "SW1.1"
+      ]
+    },
+    {
+      "name": "SCL",
+      "kind": "signal",
+      "members": [
+        "U1.28",
+        "U3.4",
+        "R4.1"
+      ]
+    },
+    {
+      "name": "SDA",
+      "kind": "signal",
+      "members": [
+        "U1.27",
+        "U3.3",
+        "R3.1"
+      ]
+    },
+    {
+      "name": "XTAL1",
+      "kind": "signal",
+      "members": [
+        "U1.9",
+        "Y1.1",
+        "C3.1"
+      ]
+    },
+    {
+      "name": "XTAL2",
+      "kind": "signal",
+      "members": [
+        "U1.10",
+        "Y1.2",
+        "C4.1"
+      ]
+    }
+  ],
+  "meta": {
+    "subcircuits": [
+      "mcu_min_system",
+      "power_ldo5v",
+      "led_indicator",
+      "i2c_sensor"
+    ],
+    "selection_source": "heuristic",
+    "build_log": [
+      "主控 U1 使用 16MHz 晶振"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+﻿位号,值,器件符号,封装,作用,备注
+U1,ATmega328P-PU,pcbagent:MCU_ATmega328P,Package_DIP:DIP-28_W7.62mm,主控 MCU,最小系统核心
+C1,100nF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,VCC 去耦,紧靠 U1 引脚 7
+C2,100nF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,AVCC 去耦,紧靠 U1 引脚 20
+R1,10k,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,复位上拉,防止复位脚悬空误触发
+SW1,SW_PUSH,pcbagent:SW_PUSH,Button_Switch_SMD:SW_SPST_B3U-1000P,复位按键,按下拉低复位
+Y1,16MHz,pcbagent:XTAL,Crystal:Crystal_HC49-4H_Vertical,时钟晶振,时钟源
+C3,22pF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,晶振负载电容,与晶振匹配，典型 22pF
+C4,22pF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,晶振负载电容,与晶振匹配，典型 22pF
+C5,100nF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,AREF 滤波,稳定 ADC 参考
+J1,Conn_01x02,pcbagent:CONN_2,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,电源输入,外接 7~12V 适配器
+U2,AMS1117-5.0,pcbagent:LDO_AMS1117_5V,Package_TO_SOT_SMD:SOT-223-3_TabPin2,线性稳压,7~12V 降至 5V
+C6,10uF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,输入滤波,抑制上电冲击
+C7,10uF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,输出滤波,稳定 5V 输出
+R2,330,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,LED 限流,限制 LED 电流约 10mA
+D1,LED-Green,pcbagent:LED,LED_SMD:LED_0603_1608Metric,状态指示灯,心跳 / 状态指示
+U3,I2C_SENSOR,pcbagent:SENSOR_I2C,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,I2C 传感器接口,4 线模块接口
+R3,4.7k,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,SDA 上拉,I2C 开漏必需
+R4,4.7k,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,SCL 上拉,I2C 开漏必需

@@ -1,0 +1,11 @@
+需求：帮我设计一块 Arduino 最小系统板，带电源指示灯和一路 I2C 传感器接口，7~12V 供电
+板卡：Arduino 最小系统板
+结果：Arduino 最小系统板: 18 个器件 / 11 条网络 / 48 个连接点
+闭环：1 轮，0 个错误 / 1 个警告
+模式：离线规则兜底
+  原理图: runs\demo\board.kicad_sch
+  BOM: runs\demo\bom.csv
+  设计 JSON: runs\demo\design.json
+
+校验结果：0 个错误 / 1 个警告
+  WARN  PIN_FLOATING [U1]: U1 有 17 个引脚未连接：2(PD0/RXD), 3(PD1/TXD), 4(PD2), 5(PD3), 6(PD4), 11(PD5), 12(PD6), 14(PB0) ...
