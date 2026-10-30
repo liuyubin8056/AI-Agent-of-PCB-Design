@@ -1,0 +1,337 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-10-30T17:52:00",
+    "ignored_checks": [
+        {
+            "description": "Global label only appears once in the schematic",
+            "key": "single_global_label"
+        },
+        {
+            "description": "Four connection points are joined together",
+            "key": "four_way_junction"
+        },
+        {
+            "description": "SPICE model issue",
+            "key": "simulation_model_issue"
+        },
+        {
+            "description": "Assigned footprint doesn't match footprint filters",
+            "key": "footprint_filter"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning"
+    ],
+    "kicad_version": "10.0.7",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/f98f3a91-571e-4345-9c59-a1c762c5aa8d",
+            "violations": [
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 #FLG1 [PWR_FLAG]",
+                            "pos": {
+                                "x": 12.7,
+                                "y": 254.0
+                            },
+                            "uuid": "31be09ac-07e0-4794-91b3-83c893fc2a44"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 #FLG2 [PWR_FLAG]",
+                            "pos": {
+                                "x": 38.1,
+                                "y": 254.0
+                            },
+                            "uuid": "05c0d4ba-f2e1-4fc3-946a-a4906a35781b"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 U1 [MCU_ATmega328P]",
+                            "pos": {
+                                "x": 48.26,
+                                "y": 41.91
+                            },
+                            "uuid": "273cb2a3-0f62-48fb-966b-7c0833b3970e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 Y1 [XTAL]",
+                            "pos": {
+                                "x": 48.26,
+                                "y": 100.33
+                            },
+                            "uuid": "c09af1fc-78bf-4602-998b-7309ff8bf3a2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 U2 [LDO_AMS1117_5V]",
+                            "pos": {
+                                "x": 48.26,
+                                "y": 158.75
+                            },
+                            "uuid": "a4e60869-40ee-41d0-b9e8-13bfcaaef565"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 U3 [SENSOR_I2C]",
+                            "pos": {
+                                "x": 48.26,
+                                "y": 217.17
+                            },
+                            "uuid": "da8578bb-7090-4fad-8247-b372a9a4cd4d"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C1 [CAP]",
+                            "pos": {
+                                "x": 119.38,
+                                "y": 41.91
+                            },
+                            "uuid": "b8caf9fb-18c4-4739-9b4f-4d3f572ca5ae"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C3 [CAP]",
+                            "pos": {
+                                "x": 119.38,
+                                "y": 100.33
+                            },
+                            "uuid": "45bfbee5-b5d8-496a-9c85-ac863fdba533"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C6 [CAP]",
+                            "pos": {
+                                "x": 119.38,
+                                "y": 158.75
+                            },
+                            "uuid": "9b7a8829-1f1d-429b-9ebb-d8267d9bdd96"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 R3 [RES]",
+                            "pos": {
+                                "x": 119.38,
+                                "y": 217.17
+                            },
+                            "uuid": "346bc605-c2d2-439f-a5aa-6b10cdbff230"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C2 [CAP]",
+                            "pos": {
+                                "x": 190.5,
+                                "y": 41.91
+                            },
+                            "uuid": "29d18523-1087-4354-a65e-f7bcf80c762e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C4 [CAP]",
+                            "pos": {
+                                "x": 190.5,
+                                "y": 100.33
+                            },
+                            "uuid": "5fec9cd6-8738-49bf-8a3c-15e0fda75a8a"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C7 [CAP]",
+                            "pos": {
+                                "x": 190.5,
+                                "y": 158.75
+                            },
+                            "uuid": "cb8630f7-4141-47ba-a7e5-0ca11e554d46"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 R4 [RES]",
+                            "pos": {
+                                "x": 190.5,
+                                "y": 217.17
+                            },
+                            "uuid": "ef9d9ab7-9503-4a46-b456-b96666f8777b"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 R1 [RES]",
+                            "pos": {
+                                "x": 261.62,
+                                "y": 41.91
+                            },
+                            "uuid": "2f061e95-3843-492d-b716-9d955c2aa711"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 C5 [CAP]",
+                            "pos": {
+                                "x": 261.62,
+                                "y": 100.33
+                            },
+                            "uuid": "dc90d064-d4ae-4931-8ea9-380c511c6684"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 R2 [RES]",
+                            "pos": {
+                                "x": 261.62,
+                                "y": 158.75
+                            },
+                            "uuid": "2eeac291-ff1d-40de-a7ab-916de5dc00ba"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 SW1 [SW_PUSH]",
+                            "pos": {
+                                "x": 332.74,
+                                "y": 41.91
+                            },
+                            "uuid": "56b1afc4-18b0-4a76-a42b-672a538df22f"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 J1 [CONN_2]",
+                            "pos": {
+                                "x": 332.74,
+                                "y": 100.33
+                            },
+                            "uuid": "11808b98-8fa6-4f5c-8536-e600c99dc8ff"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                },
+                {
+                    "description": "当前配置不包含符号库 'pcbagent'",
+                    "items": [
+                        {
+                            "description": "符号 D1 [LED]",
+                            "pos": {
+                                "x": 332.74,
+                                "y": 158.75
+                            },
+                            "uuid": "ba866063-68df-4a71-9046-2ca9aab8f48a"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "lib_symbol_issues"
+                }
+            ]
+        }
+    ],
+    "source": "board.kicad_sch"
+}

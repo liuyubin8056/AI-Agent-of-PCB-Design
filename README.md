@@ -15,8 +15,9 @@ python -m pcb_agent "帮我设计一块 Arduino 最小系统板，带指示灯�
 产物：runs/<时间戳>/board.kicad_sch  bom.csv  design.json  summary.json  trace.jsonl
 ```
 
-当前进度：**W1–W4 已完成**（骨架 + MVP + 闭环 + 追问改需求），KiCad 8 侧的真机验证与
-DRC 闭环留给 W5–W7。详见[八周排期](#八周排期)。
+当前进度：**W1–W6 已完成**。骨架、MVP、审查闭环、追问改需求均可用，并已通过 **KiCad
+真机验证**：从生成的原理图导出网表，与 IR 逐引脚一致（差异 0 条），ERC **0 error**。
+DRC 闭环与报告留 W7–W8。详见下文「六、八周排期」。
 
 ---
 
@@ -73,6 +74,34 @@ BOM + 引脚级网表    ← subcircuits 用引脚语义 + 器件库确定性生
 > 没有用 CrewAI / AutoGen：角色对话式编排在「引脚级网表」这种强结构化任务上会发散、
 > 成本高、不可复现。多 Agent 的价值在「角色职责 + 工具权限 + 共享结构化状态」，不在聊天。
 
+### 真机验证结果（KiCad 10.0.7，2026-10-30）
+
+不是"应该能打开"，是真跑了：
+
+| 检查项 | 方法 | 结果 |
+|---|---|---|
+| 原理图可解析 | `kicad-cli sch export svg` | 成功导出，符号与网络名正常绘制 |
+| 原理图 == 网表 | `kicad-cli sch export netlist` + `diff_with_ir` | **11/11 网络、48/48 连接点完全一致，差异 0 条** |
+| 电气规则 | `kicad-cli sch erc --format json` | **0 error**（首版 17 error / 43 warning，按下面三条修掉） |
+| 故障自愈 | `--inject-fault decoupling` | 2 轮收敛，删掉的去耦电容被自动补回，ERC 重新清零 |
+
+首版 ERC 报错对应的三条修复，已写成测试锁定：
+
+1. `pin_to_pin`：LDO 的 VOUT 已是 power_out，再加 PWR_FLAG 就成了两个 power output 相连
+   → 只在"没有 power_out 驱动源"的网络上加 PWR_FLAG（`test_power_flag_only_when_no_driver`）。
+2. `pin_not_connected`：28 脚 MCU 的空置 GPIO 没做标记 → 逐个打 `no_connect`
+   （`test_floating_pins_get_no_connect`）。
+3. `endpoint_off_grid`：坐标不在 1.27 mm 栅格 → 器件坐标与引脚端点全部吸附栅格
+   （`test_all_connection_points_on_grid`）。
+
+复现：
+
+```bash
+kicad-cli sch export netlist --format kicadsexpr -o board.net examples/board.kicad_sch
+kicad-cli sch erc --format json --output erc.json examples/board.kicad_sch
+python -m pytest tests/test_kicad.py -q
+```
+
 ### 与课程「五步走」的对应
 
 | 课程要求 | 本仓库实现 |
@@ -109,14 +138,14 @@ pcb-agent/
 │   ├── textutil.py              否定词检测（规则兜底用）
 │   ├── agents/                  analyst / designer / critic
 │   └── ui/streamlit_app.py      演示界面（可选）
-└── tests/                       47 个用例，全部离线可跑
+└── tests/                       54 个用例（含 KiCad 集成测试，未装自动跳过）
 ```
 
 ---
 
 ## 四、快速开始
 
-要求 Python 3.10+。**不需要 API key，不需要安装 KiCad。**
+要求 Python 3.10+。**不需要 API key；不装 KiCad 也能跑通全流程**（自动降级，跳过网表/ERC）。
 
 ```bash
 git clone https://github.com/liuyubin8056/AI-Agent-of-PCB-Design.git
@@ -124,8 +153,12 @@ cd AI-Agent-of-PCB-Design
 
 python -m pip install -e ".[dev]"     # 或直接 PYTHONPATH=src 运行
 python -m pcb_agent --demo            # 零配置跑通全流程
-python -m pytest -q                   # 47 passed
+python -m pytest -q                   # 54 passed
 ```
+
+装了 KiCad 之后不用改配置：`KiCadGate` 会读注册表
+`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` 下的 `DisplayName` / `InstallLocation`
+自动找到 `kicad-cli`（KiCad 安装器不写 PATH）。要手动指定就在 `.env` 里写 `KICAD_CLI=`。
 
 接入真实 LLM（DeepSeek / 通义 / 智谱 / 学校平台 / 本地 Ollama 均可）：
 
@@ -206,15 +239,15 @@ analyst → designer → [render + validate + kicad] → critic → apply patch 
 |---|---|---|---|
 | W1 | 认识 KiCad 与 LLM API，装环境，跑通模板工程 | 脚手架跑通 | ✅ 仓库骨架 + 零依赖 demo |
 | W2 | 学 prompt 设计与工具调用，写最小 Agent | 会写工具调用 | ✅ LLM 客户端 + JSON 回灌重试 |
-| W3–W4 | 打通「自然语言 → BOM + 连接表」，输出结构化 JSON | **MVP 演示** | ✅ IR + 器件库 + 子电路模板 + 47 个测试 |
-| W5–W6 | 用脚本接口把 JSON 变成真实原理图，支持简单改需求 | **原理图生成** | 🟡 渲染器已产出 `.kicad_sch`，待在 KiCad 8 真机打开验证；补丁机制已完成 |
-| W7 | 打磨提示词与体验，进阶组做 DRC 检查闭环 | 闭环通过 | 🟡 原理图侧闭环已通（故障注入可自愈）；PCB 侧 DRC 待接 |
+| W3–W4 | 打通「自然语言 → BOM + 连接表」，输出结构化 JSON | **MVP 演示** | ✅ IR + 器件库 + 子电路模板 + 54 个测试 |
+| W5–W6 | 用脚本接口把 JSON 变成真实原理图，支持简单改需求 | **原理图生成** | ✅ `.kicad_sch` 已在 KiCad 10.0.7 打开验证：网表零差异、ERC 零错误；补丁机制已完成 |
+| W7 | 打磨提示词与体验，进阶组做 DRC 检查闭环 | 闭环通过 | 🟡 原理图侧闭环已通（故障注入可自愈，含 ERC）；PCB 侧 DRC 待接 |
 | W8 | 写设计报告、录演示视频、准备答辩 PPT | 正式交付 | ⬜ |
 
 近期待办：
 
-- [ ] 安装 KiCad 8，按 `docs/kicad-notes.md` 第 4 节清单验证 `.kicad_sch` 能打开
-- [ ] 跑 `kicad-cli sch export netlist`，用 `diff_with_ir` 证明「原理图 == 网表」
+- [x] 安装 KiCad，按 `docs/kicad-notes.md` 第 4 节清单验证 `.kicad_sch` 能打开
+- [x] 跑 `kicad-cli sch export netlist`，用 `diff_with_ir` 证明「原理图 == 网表」
 - [ ] 接入真实 LLM，跑通一次 LLM 路径并记录 token 消耗
 - [ ] 扩充测试需求到 8 条，产出消融实验表格
 - [ ] 生成 `.kicad_pcb`，接 `pcb drc` 做进阶任务
@@ -231,8 +264,12 @@ analyst → designer → [render + validate + kicad] → critic → apply patch 
 - **当前器件库只有 10 个器件**，只够做最小系统类板卡；扩充方式见 `data/symbols.json`。
 - **规则兜底不等于语义理解**：离线模式靠关键词 + 否定词检测（`textutil.py`），
   复杂需求仍需要真实 LLM。
-- **KiCad 侧尚未真机验证**：本机未安装 KiCad 8，`.kicad_sch` 目前只做了括号配平、
-  s-expression 解析、引脚端点与 IR 一一对应三层自检。
+- **只按 KiCad 8 格式输出**（版本号 `20231120`）。本机装的是 KiCad 10.0.7，向上兼容可直接
+  打开；若要兼容更老的 KiCad，需要下调版本号并回归验证。
+- **无头 ERC 会报 20 条 `lib_symbol_issues`**（"当前配置不包含符号库 pcbagent"）。原因是
+  `kicad-cli` 只读全局符号库表，不读工程目录的 `sym-lib-table`；符号定义已内嵌在原理图
+  `lib_symbols` 里，渲染和网表都正确，因此代码里把它当环境噪声过滤（见 `kicad_gate.py`）。
+- **不做自动布线**，器件按网格摆放，标签可能视觉拥挤，不影响电气正确性。
 
 ---
 

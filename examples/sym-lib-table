@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "pcbagent")(type "KiCad")(uri "${KIPRJMOD}/pcbagent.kicad_sym")(options "")(descr "pcb_agent 自动生成的符号库"))
+)

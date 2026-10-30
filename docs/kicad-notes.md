@@ -1,33 +1,64 @@
-# KiCad 8 集成笔记
+# KiCad 集成笔记
 
-记录踩过 / 预判过的问题，避免 W5–W6 集成阶段重复试错。
+本仓库的 KiCad 侧能力全部实测过，下面是结论与踩坑记录，便于复现。
 
-## 1. 环境事实
+## 1. 本机环境（2026-10-30 实测）
+
+| 项 | 值 |
+|---|---|
+| 版本 | KiCad **10.0.7**（注册表 `DisplayName`） |
+| 安装位置 | `F:\KiCard`（注册表 `InstallLocation`，**非默认路径**） |
+| CLI | `F:\KiCard\bin\kicad-cli.exe`，**不在 PATH** |
+| 自动发现 | `kicad_gate.KiCadGate._from_registry()` 读 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` 的 `DisplayName` / `InstallLocation` |
+
+注册表查询命令：
+
+```powershell
+Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\* |
+  Where-Object { $_.DisplayName -like "*KiCad*" } |
+  Select-Object DisplayName, DisplayVersion, InstallLocation
+```
+
+## 2. 环境事实
 
 | 事实 | 影响 |
 |---|---|
-| KiCad 8 自带 `kicad-cli` | 网表、ERC、DRC 全部可命令行化，是闭环的前提 |
+| KiCad 自带 `kicad-cli` | 网表、ERC、DRC 全部可命令行化，是闭环的前提 |
 | `pcbnew` 有 Python 绑定，`eeschema` **没有** | 「用 Python 脚本画原理图」只能走 s-expression 或 SKiDL 两条路 |
-| `.kicad_sch` 是 s-expression，首行版本号 `20231120` 对应 KiCad 8 | 版本号写错，KiCad 会直接拒绝打开并提示版本不兼容 |
-| 原理图与符号库的 Y 轴方向相反 | 器件放在 (X, Y) 后，引脚世界坐标是 `(X + px, Y - py)` |
+| `.kicad_sch` 首行版本号 `20231120` = KiCad 8 格式 | 写错 KiCad 直接拒绝打开；KiCad 9/10 可向上读取 v8 文件 |
+| 符号库坐标系 Y 轴向上、原理图 Y 轴向下 | 器件放在 (X, Y) 后，引脚世界坐标 = `(X + px, Y - py)` |
+| 连接栅格是 1.27 mm | 坐标不在栅格上，ERC 报 `endpoint_off_grid` |
 
-## 2. 本项目采用的路线
+## 3. 本项目采用的路线
 
-**自己生成 `.kicad_sch`**，理由：
+**自己生成 `.kicad_sch` + 配套 `pcbagent.kicad_sym` + `sym-lib-table`**：
 
-1. 不依赖本机是否装了 KiCad（CI、答辩机、助教机器都能跑）；
-2. 引脚编号由器件库直接决定，与网表 100% 对齐，不会出现「符号引脚和网表对不上」；
-3. 可以精确控制坐标，天然可复现。
+1. 不依赖本机是否装了 KiCad（CI、助教机器都能跑）；
+2. 引脚编号由器件库决定，与网表 100% 对齐；
+3. 可精确控制坐标，天然可复现。
 
-代价：图形从简（矩形框 + 引脚）。后续若要更好看，可以把 `lib_symbols` 换成
-KiCad 官方库的符号定义，`render.py` 的 `emit_lib_symbol` 是唯一改动点。
+**连接方式：全局标签代替 wire。** 全局标签放在引脚端点上即视为电气相连，
+整张图不需要任何 `wire`，也就不存在「器件重叠导致连线错乱」。
+代价是图面标签密集，不影响电气正确性。
 
-**连接方式：全局标签代替 wire。**
-在 KiCad 中，把 global label 放在引脚端点上即视为电气相连。因此整张图不需要任何
-`wire` 元素，也就不存在「器件重叠导致连线错乱」这个自动生成原理图最头疼的问题。
-代价是 ERC 会看到一堆标签，图面信息密度高于手绘。
+## 4. 实测结果与三条必修项
 
-## 3. 常用命令
+首版生成的原理图 ERC 结果：**17 error / 43 warning**。逐条修完后 **0 error**。
+
+| ERC 类型 | 原因 | 修复 |
+|---|---|---|
+| `pin_to_pin` (error) | LDO 的 VOUT 是 `power_out`，又给它加了 `PWR_FLAG`（也是 `power_out`），两个 power output 相连 | 只在**没有** `power_out` 驱动源的网络上加 PWR_FLAG |
+| `pin_not_connected` (error) × 17 | 28 脚 MCU 的空置 GPIO 没有任何标记 | 每个未连接引脚画 `no_connect` |
+| `endpoint_off_grid` (warning) × 21 | 坐标 48.0 之类不在 1.27 栅格 | 器件坐标与引脚端点全部吸附 1.27，单元格尺寸取 2.54 的整数倍 |
+| `lib_symbol_issues` (warning) × 20 | 无头 ERC 只读全局符号库表，读不到工程目录的 `sym-lib-table` | 判为环境噪声；符号已内嵌在原理图 `lib_symbols`，不影响渲染与网表 |
+
+> `lib_symbol_issues` 试过两种解法都无效：把 `sym-lib-table` 的 uri 改成绝对路径、
+> 在目录里补 `.kicad_pro`。`kicad-cli` 的 ERC 不加载工程级库表。
+> 因此代码里在 `parse_erc_json` 过滤该类，并在 README 的「已知限制」中公开说明。
+
+网表一致性（最关键的一条）：从原理图导出的网表与 IR **11/11 网络、48/48 连接点完全一致**。
+
+## 5. 常用命令
 
 ```bash
 # 版本
@@ -36,31 +67,34 @@ kicad-cli --version
 # 从原理图导出网表（用于和 IR 交叉校验）
 kicad-cli sch export netlist --format kicadsexpr -o board.net board.kicad_sch
 
-# 电气规则检查
+# 电气规则检查（注意：--format json 才机器可读）
 kicad-cli sch erc --format json --output erc.json board.kicad_sch
+
+# 渲染成矢量图，肉眼确认布局
+kicad-cli sch export svg -o svg/ board.kicad_sch
 
 # PCB 设计规则检查（W7 进阶任务用）
 kicad-cli pcb drc --format json --output drc.json board.kicad_pcb
 
-# 导出 PDF / SVG 便于报告插图
+# 导出 PDF 便于报告插图
 kicad-cli sch export pdf -o board.pdf board.kicad_sch
 ```
 
-各小版本 flag 可能有差异，以 `kicad-cli sch erc -h` 的输出为准。
-`kicad_gate.py` 里的参数按 KiCad 8.0 编写，若报参数错误先查帮助。
+各小版本 flag 有差异，以 `kicad-cli sch erc -h` 为准。
 
-## 4. 首次在 KiCad 中打开后的检查清单
+## 6. 首次在 KiCad 中打开后的检查清单
 
-1. 打开 `examples/board.kicad_sch`，确认没有「文件版本过旧」弹窗；
-2. 看器件是否都显示为矩形框 + 引脚名（引脚名来自我们的器件库，不是官方图形库）；
-3. 放大看引脚端点是否正好落在全局标签的锚点上——错位说明 Y 轴换算方向反了，
+1. 打开 `examples/board.kicad_sch`，确认没有「文件版本过旧」或「符号缺失」弹窗；
+2. 器件应为矩形框 + 引脚名（引脚名来自本仓库器件库，不是官方图形库）；
+3. 放大看引脚端点是否正好落在全局标签锚点上——错位说明 Y 轴换算方向反了，
    改 `render.py` 中 `wy = y - pin.py` 的符号；
-4. 跑 `检查 -> 电气规则检查`，预期只剩「引脚未连接」类警告；
-5. 跑 `kicad-cli sch export netlist`，用 `diff_with_ir` 与 IR 对比，应完全一致。
+4. 跑「检查 → 电气规则检查」，预期 0 error；
+5. `kicad-cli sch export netlist` + `diff_with_ir` 对比，应完全一致
+   （已由 `tests/test_kicad.py` 覆盖）。
 
-## 5. 后续可做的增强
+## 7. 后续可做的增强
 
-- 换用官方库符号（美观 + 引脚图形正确）；
+- 换用官方库符号（美观 + 引脚图形正确），只改 `render.py::emit_lib_symbol`；
 - 引入 SKiDL 作为第二条独立生成路径，与 s-expression 路径做网表 diff，互为验证；
 - 自动布局从「网格摆放」升级为「按功能分区 + 力导向」；
-- 生成 `.kicad_pcb` 后接 DRC 闭环（进阶任务）。
+- 生成 `.kicad_pcb` 后接 `pcb drc` 闭环（进阶任务）。
