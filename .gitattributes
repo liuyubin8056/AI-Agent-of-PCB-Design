@@ -1,0 +1,17 @@
+# 统一换行符，避免 Windows/Linux 协作出 diff 噪声
+* text=auto eol=lf
+
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.kicad_sch text eol=lf
+*.kicad_pcb text eol=lf
+*.net       text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.pdf   binary
+*.pptx  binary
+*.xlsx  binary
