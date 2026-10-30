@@ -199,16 +199,22 @@ def check_power_rail_source(idx: _Index) -> list[Issue]:
 
 
 def check_decoupling(idx: _Index) -> list[Issue]:
-    """每个带 IC 电源脚的电源网络都要有对地去耦电容。"""
+    """每个 IC 电源脚都要有一颗对地去耦电容（按数量配比做近似判断）。
+
+    严格做法需要 PCB 布局信息才能判断「是否紧靠引脚」，原理图阶段用
+    「电容数 >= 电源脚数」作为可执行的近似判据，并在报告里说明这一取舍。
+    """
     issues = []
     for name in idx.nets_of_kind("power"):
         ic_pins = [m for m in idx.net_members[name] if idx.pin_type(m) == "power_in"]
         if not ic_pins:
             continue
-        if not idx.caps_to_ground(name):
+        caps = idx.caps_to_ground(name)
+        if len(caps) < len(ic_pins):
             issues.append(
                 Issue("POWER_RAIL_NO_DECOUPLING", ERROR,
-                      f"电源网络 {name} 上没有对地去耦电容", name,
+                      f"电源网络 {name} 上有 {len(ic_pins)} 个 IC 电源脚，"
+                      f"但只有 {len(caps)} 颗对地电容", name,
                       "每个电源脚附近都应有一颗 100nF 去耦电容")
             )
     return issues
@@ -246,7 +252,7 @@ def check_crystal_load_caps(idx: _Index) -> list[Issue]:
                 issues.append(
                     Issue("XTAL_NO_LOAD_CAP", ERROR,
                           f"晶振 {item.ref} 的引脚 {pin['number']} 所在网络没有负载电容",
-                          item.ref, "晶振两端各需一颗负载电容对地，典型 22pF")
+                          nets[0], "晶振两端各需一颗负载电容对地，典型 22pF")
                 )
     return issues
 
