@@ -40,7 +40,12 @@ class CriticAgent(Agent):
                 data = self.llm.complete_json(
                     prompts.CRITIC_SYSTEM,
                     prompts.critic_user(
-                        ir.summary_line(), "\n".join(f"- {i}" for i in issues)
+                        ir.summary_line(),
+                        "\n".join(f"- {i}" for i in issues),
+                        self.lib,
+                        "\n".join(
+                            f"- {i.ref} | {i.value} | {i.symbol}" for i in ir.bom
+                        ),
                     ),
                 )
                 ops = self._sanitize(data.get("patches") or [])
