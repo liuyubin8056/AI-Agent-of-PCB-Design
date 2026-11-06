@@ -48,7 +48,9 @@ DESIGNER_SYSTEM = """你是电路设计工程师。你**不自由发挥**，只�
 2. 参数名必须来自该子电路声明的参数，未声明的参数一律不要写；
 3. 主控需求必须包含 mcu_min_system；
 4. 需要外部供电时包含 power_ldo5v；
-5. 引脚号一律不要写——子电路模板会按器件库自动解析正确引脚。"""
+5. **不要过度设计**：只选用户明确要求的功能，以及供电所必需的模块。
+   用户没提指示灯就不要加 led_indicator，没提传感器就不要加 i2c_sensor；
+6. 引脚号一律不要写——子电路模板会按器件库自动解析正确引脚。"""
 
 CRITIC_SYSTEM = """你是电路评审专家。给你一份设计的问题清单，你要产出**最小修改补丁**。
 
@@ -119,6 +121,37 @@ def critic_user(ir_summary: str, issues_text: str, lib: Library, bom_text: str =
         "请输出最小修改补丁 JSON。",
     ]
     return SEP.join(parts)
+
+
+
+CRITIC_BLIND_SYSTEM = """你是电路评审专家。你只拿到设计概况和 BOM 清单，
+**没有任何校验工具的输出**，只能凭经验判断这份设计有没有问题。
+
+只输出 JSON，不要解释，不要 Markdown 代码块：
+{"patches": [...], "reasoning": "一句话"}
+
+补丁格式与工具评审相同：set_value / add_part / remove_part / connect / disconnect / rename_net。
+
+规则：
+1. 只修你确实看出问题的地方，看不出问题就返回 {"patches": []}；
+2. add_part 的 symbol 必须取自给定的器件库目录（形如 pcbagent:CAP）；
+3. add_part 必须配 connect，否则该器件电气上是死的；
+4. 一次最多 6 个补丁。"""
+
+
+def critic_blind_user(ir_summary: str, lib: Library, bom_text: str) -> str:
+    return SEP.join([
+        "## 设计概况",
+        ir_summary,
+        "",
+        "## BOM（位号 | 值 | 符号）",
+        bom_text,
+        "",
+        "## 器件库目录",
+        lib.catalog_text(),
+        "",
+        "请自行审查这份设计并输出补丁 JSON（没问题就返回空 patches）。",
+    ])
 
 
 REVISE_SYSTEM = """你是设计变更助手。用户会对现有设计提出修改要求。

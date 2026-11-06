@@ -65,6 +65,40 @@ class CriticAgent(Agent):
         )
         return ops[:MAX_PATCHES]
 
+    def review_blind(self, ir: DesignIR, round_no: int = 1) -> list[PatchOp]:
+        """消融实验 C 组用：不给校验结果，只让模型「凭经验再看一眼」。
+
+        这是多数人想象中多 Agent 的样子，也是本方案要证伪的对照组。
+        离线模式不伪造盲评审，直接返回空（否则 A/B/C 无法区分）。
+        """
+        self.unfixable = []
+        if self.offline:
+            self.log(round_no, action="review_blind", patches=0, note="离线不支持盲评审")
+            return []
+
+        ops: list[PatchOp] = []
+        try:
+            data = self.llm.complete_json(
+                prompts.CRITIC_BLIND_SYSTEM,
+                prompts.critic_blind_user(
+                    ir.summary_line(),
+                    self.lib,
+                    "\n".join(f"- {i.ref} | {i.value} | {i.symbol}" for i in ir.bom),
+                ),
+            )
+            ops = self._sanitize(data.get("patches") or [])
+        except (LLMError, ValueError, TypeError) as exc:
+            self.notes.append(f"盲评审 LLM 失败：{exc}")
+            ops = []
+
+        self.log(
+            round_no,
+            action="review_blind",
+            patches=len(ops),
+            ops=[o.op for o in ops],
+        )
+        return ops[:MAX_PATCHES]
+
     # ------------------------------------------------------------------ #
     def _sanitize(self, raw: list) -> list[PatchOp]:
         ops: list[PatchOp] = []
