@@ -23,6 +23,22 @@ class LLMError(RuntimeError):
 class LLMClient:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings.load()
+        # 累计 token 用量，报告里的实验数据直接从这里取
+        self.usage: dict[str, int] = {
+            "calls": 0,
+            "retries": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
+        # 累计 token 用量，报告里的实验数据直接从这里取
+        self.usage: dict[str, int] = {
+            "calls": 0,
+            "retries": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+        }
 
     @property
     def available(self) -> bool:
@@ -61,6 +77,14 @@ class LLMClient:
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise LLMError(f"调用失败：{exc}") from exc
 
+        usage = body.get("usage") or {}
+        self.usage["calls"] += 1
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            try:
+                self.usage[key] += int(usage.get(key) or 0)
+            except (TypeError, ValueError):
+                pass
+
         try:
             return body["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
@@ -76,6 +100,7 @@ class LLMClient:
                 return extract_json(text)
             except ValueError as exc:
                 last_error = str(exc)
+                self.usage["retries"] += 1
                 prompt = (
                     f"{user}\n\n你上一次的输出无法解析为 JSON（{last_error}）。"
                     "请只输出一个合法的 JSON 对象，不要任何解释文字和代码块标记。"
