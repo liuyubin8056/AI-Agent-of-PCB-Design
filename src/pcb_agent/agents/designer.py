@@ -17,6 +17,13 @@ from ..textutil import is_negated
 from .base import Agent
 
 
+# 可选子电路的「需求依据」关键词；没出现在需求里就不该被选中
+OPTIONAL_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "led_indicator": ("led", "指示灯", "指示", "灯"),
+    "i2c_sensor": ("i2c", "传感器", "sensor", "sda", "scl"),
+}
+
+
 class DesignerAgent(Agent):
     def __init__(self, **kwargs) -> None:
         kwargs.setdefault("name", "designer")
@@ -28,6 +35,7 @@ class DesignerAgent(Agent):
         spec: BoardSpec,
         feedback: list[Issue] | None = None,
         round_no: int = 1,
+        raw_request: str = "",
     ) -> DesignIR:
         feedback = feedback or []
         selections: list[dict] = []
@@ -54,6 +62,8 @@ class DesignerAgent(Agent):
             selections = self._select_offline(spec)
             if source == "llm":
                 source = "llm->heuristic"
+        else:
+            selections = self._prune_unsupported(selections, spec, source, raw_request)
 
         parts, nets, log = build_board(selections, self.lib)
         ir = DesignIR(
@@ -95,6 +105,41 @@ class DesignerAgent(Agent):
                 self.notes.append(f"{sid} 丢弃未声明参数：{', '.join(sorted(dropped))}")
             clean.append({"id": sid, "params": kept})
         return clean
+
+    def _prune_unsupported(
+        self, selections: list[dict], spec: BoardSpec, source: str, raw_request: str = ""
+    ) -> list[dict]:
+        """确定性护栏：模型可以"提议"，但每个可选子电路必须有需求文本作依据。
+
+        真实 LLM 容易过度设计——用户没提指示灯，它照样加一个。光靠 prompt 约束不住，
+        所以在模型输出之后再过一道规则，和「引脚白名单」是同一个思路。
+        """
+        # 以用户原话为准：需求分析 Agent 会"按常见做法补齐"，那部分不算需求依据
+        if raw_request.strip():
+            blob = raw_request.lower()
+        else:
+            blob = " ".join(
+                [spec.title, spec.summary, " ".join(spec.functions), " ".join(spec.interfaces)]
+            ).lower()
+
+        def supported(sid: str) -> bool:
+            words = OPTIONAL_KEYWORDS.get(sid)
+            if not words:
+                return True  # mcu / 供电属于必需
+            return any(w in blob and not is_negated(blob, w) for w in words)
+
+        kept: list[dict] = []
+        for item in selections:
+            sid = str(item.get("id"))
+            if supported(sid):
+                kept.append(item)
+            else:
+                self.notes.append(f"护栏剔除 {sid}：需求中没有对应功能描述")
+                if self.tracer:
+                    self.tracer.event("prune", subcircuit=sid, source=source)
+        if not any(s["id"] == "mcu_min_system" for s in kept):
+            kept.insert(0, {"id": "mcu_min_system", "params": {}})
+        return kept
 
     def _select_offline(self, spec: BoardSpec) -> list[dict]:
         blob = " ".join(

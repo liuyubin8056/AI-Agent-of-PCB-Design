@@ -45,7 +45,7 @@ class LLMClient:
         return not self.settings.offline and bool(self.settings.api_key)
 
     # ------------------------------------------------------------------ #
-    def complete(self, system: str, user: str, temperature: float = 0.2) -> str:
+    def complete(self, system: str, user: str, temperature: float | None = None) -> str:
         if not self.available:
             raise LLMError("当前为离线模式，没有可用的 LLM 后端")
         url = self.settings.base_url.rstrip("/") + "/chat/completions"
@@ -55,7 +55,7 @@ class LLMClient:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-            "temperature": temperature,
+            "temperature": self.settings.temperature if temperature is None else temperature,
             "stream": False,
         }
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")

@@ -128,6 +128,34 @@ python -m pytest tests/test_kicad.py -q
    而当时只算 warning。修法：新增 `PART_UNCONNECTED` 规则（error 级），并让 `revise`
    也走返修闭环——实测从「留下 2 个错误」变成「2 轮自动接好线」。
 
+### 消融实验怎么跑
+
+```bash
+python -m pcb_agent.ablation                      # 8 用例 × 4 配置，默认各自注入一处故障
+python -m pcb_agent.ablation --fault none         # 不注入故障，只看生成质量
+python -m pcb_agent.ablation --cases 1-4 --configs A,B,C,D
+python -m pcb_agent.ablation --offline --no-kicad # 冒烟，不烧 token
+```
+
+四组配置是**逐级加一个变量**的阶梯，差异才能归因：
+
+| 配置 | 需求分析 | 返修方式 | 想验证什么 |
+|---|---|---|---|
+| A | 规则兜底 | 不返修 | 一次生成的错误率基线 |
+| B | 规则兜底 | 确定性规则修复（不调 LLM） | 校验器本身值多少 |
+| C | LLM | LLM 评审，但**看不到**校验结果 | 多 Agent 没有工具是不是白搭 |
+| D | LLM | LLM 评审 + 结构化问题清单 | 本方案 |
+
+为什么默认注入故障：生成层走子电路模板，天生正确，不注入时 A/B/C/D 全是零错误，
+实验没有区分度。注入的故障必须**真的能被校验器抓到**（否则换下一个故障类型重试），
+保证每个用例都有区分度。
+
+为保证可复现，LLM 温度默认 **0**（`PCB_LLM_TEMPERATURE` 可改），否则同一个需求两次采样
+选出的子电路都不一样，表格里的「选型准确率」会变成噪声。
+
+产物：`ablation.md`（汇总表 + 明细表）、`ablation.csv`、`ablation.json`，
+每格还留了 `runs/ablation-*/<用例>/<配置>/` 下的原理图与网表，可逐个复查。
+
 ### 与课程「五步走」的对应
 
 | 课程要求 | 本仓库实现 |
@@ -239,7 +267,11 @@ analyst → designer → [render + validate + kicad] → critic → apply patch 
 两条硬规矩：
 
 1. **critic 必须带工具**。它先跑确定性校验再发言，否则就是两个模型互相附和。
-2. **回灌的是补丁不是重写**。`patch.py` 的 6 个原子操作（`set_value` / `add_part` /
+2. **designer 也不能想加就加**。LLM 会过度设计：用户只要最小系统，它也给你加个指示灯。
+   `DesignerAgent._prune_unsupported` 以**用户原话**为依据做后置裁剪（不看需求分析
+   Agent 自己补的内容），没提到 `led_indicator` / `i2c_sensor` 就剔掉。和「引脚白名单」
+   是同一个思路：模型提议，代码把关。
+3. **回灌的是补丁不是重写**。`patch.py` 的 6 个原子操作（`set_value` / `add_part` /
    `remove_part` / `connect` / `disconnect` / `rename_net`）让每次修改都有 diff 可审计，
    同时解决第 5 步「追问改需求」和 DRC 闭环里的自动修复。
 
