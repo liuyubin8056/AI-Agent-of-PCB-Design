@@ -10,10 +10,10 @@ C4,22pF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,晶振负载电容,与晶�
 C5,100nF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,AREF 滤波,稳定 ADC 参考
 J1,Conn_01x02,pcbagent:CONN_2,Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical,电源输入,外接 7~12V 适配器
 U2,AMS1117-5.0,pcbagent:LDO_AMS1117_5V,Package_TO_SOT_SMD:SOT-223-3_TabPin2,线性稳压,7~12V 降至 5V
-C6,10uF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,输入滤波,抑制上电冲击
-C7,10uF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,输出滤波,稳定 5V 输出
-R2,330,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,LED 限流,限制 LED 电流约 10mA
-D1,LED-Green,pcbagent:LED,LED_SMD:LED_0603_1608Metric,状态指示灯,心跳 / 状态指示
+C6,100nF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,输入滤波,抑制上电冲击
+C7,100nF,pcbagent:CAP,Capacitor_SMD:C_0603_1608Metric,输出滤波,稳定 5V 输出
+R2,1k,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,LED 限流,限制 LED 电流约 10mA
+D1,Green,pcbagent:LED,LED_SMD:LED_0603_1608Metric,状态指示灯,心跳 / 状态指示
 U3,I2C_SENSOR,pcbagent:SENSOR_I2C,Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical,I2C 传感器接口,4 线模块接口
 R3,4.7k,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,SDA 上拉,I2C 开漏必需
 R4,4.7k,pcbagent:RES,Resistor_SMD:R_0603_1608Metric,SCL 上拉,I2C 开漏必需

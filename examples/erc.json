@@ -1,7 +1,7 @@
 {
     "$schema": "https://schemas.kicad.org/erc.v1.json",
     "coordinate_units": "mm",
-    "date": "2026-10-30T17:52:00",
+    "date": "2026-11-06T18:59:54",
     "ignored_checks": [
         {
             "description": "Global label only appears once in the schematic",
@@ -28,7 +28,7 @@
     "sheets": [
         {
             "path": "/",
-            "uuid_path": "/f98f3a91-571e-4345-9c59-a1c762c5aa8d",
+            "uuid_path": "/49a43ce0-8d62-4fd7-9889-f3a5ba3f2836",
             "violations": [
                 {
                     "description": "当前配置不包含符号库 'pcbagent'",
@@ -39,7 +39,7 @@
                                 "x": 12.7,
                                 "y": 254.0
                             },
-                            "uuid": "31be09ac-07e0-4794-91b3-83c893fc2a44"
+                            "uuid": "ab4cf5e9-6ff7-4fd9-814d-d88727efb826"
                         }
                     ],
                     "severity": "warning",
@@ -54,7 +54,7 @@
                                 "x": 38.1,
                                 "y": 254.0
                             },
-                            "uuid": "05c0d4ba-f2e1-4fc3-946a-a4906a35781b"
+                            "uuid": "d910c985-1ab4-4016-be17-9b6f1f717953"
                         }
                     ],
                     "severity": "warning",
@@ -69,7 +69,7 @@
                                 "x": 48.26,
                                 "y": 41.91
                             },
-                            "uuid": "273cb2a3-0f62-48fb-966b-7c0833b3970e"
+                            "uuid": "45f0a298-9484-4be2-be09-394690e43b29"
                         }
                     ],
                     "severity": "warning",
@@ -84,7 +84,7 @@
                                 "x": 48.26,
                                 "y": 100.33
                             },
-                            "uuid": "c09af1fc-78bf-4602-998b-7309ff8bf3a2"
+                            "uuid": "454e02e7-40cf-49e1-a11f-983a493865d9"
                         }
                     ],
                     "severity": "warning",
@@ -99,7 +99,7 @@
                                 "x": 48.26,
                                 "y": 158.75
                             },
-                            "uuid": "a4e60869-40ee-41d0-b9e8-13bfcaaef565"
+                            "uuid": "14273d5f-6cc9-4464-9ed9-27e8c78f1be9"
                         }
                     ],
                     "severity": "warning",
@@ -114,7 +114,7 @@
                                 "x": 48.26,
                                 "y": 217.17
                             },
-                            "uuid": "da8578bb-7090-4fad-8247-b372a9a4cd4d"
+                            "uuid": "9473bd45-4ab2-4671-af3e-36cb95c4f9e7"
                         }
                     ],
                     "severity": "warning",
@@ -129,7 +129,7 @@
                                 "x": 119.38,
                                 "y": 41.91
                             },
-                            "uuid": "b8caf9fb-18c4-4739-9b4f-4d3f572ca5ae"
+                            "uuid": "46aa6100-7bc9-48d2-94a5-f9f9347443e9"
                         }
                     ],
                     "severity": "warning",
@@ -144,7 +144,7 @@
                                 "x": 119.38,
                                 "y": 100.33
                             },
-                            "uuid": "45bfbee5-b5d8-496a-9c85-ac863fdba533"
+                            "uuid": "fd04ed68-ff9a-4a84-aa02-05ca8c6a2981"
                         }
                     ],
                     "severity": "warning",
@@ -159,7 +159,7 @@
                                 "x": 119.38,
                                 "y": 158.75
                             },
-                            "uuid": "9b7a8829-1f1d-429b-9ebb-d8267d9bdd96"
+                            "uuid": "d0e202c3-ad12-4488-a734-69b8767e19d1"
                         }
                     ],
                     "severity": "warning",
@@ -174,7 +174,7 @@
                                 "x": 119.38,
                                 "y": 217.17
                             },
-                            "uuid": "346bc605-c2d2-439f-a5aa-6b10cdbff230"
+                            "uuid": "823cee91-362e-4d85-8ce3-d2714c5826ea"
                         }
                     ],
                     "severity": "warning",
@@ -189,7 +189,7 @@
                                 "x": 190.5,
                                 "y": 41.91
                             },
-                            "uuid": "29d18523-1087-4354-a65e-f7bcf80c762e"
+                            "uuid": "e49fff55-6b24-4735-b5f0-e74bd69486f5"
                         }
                     ],
                     "severity": "warning",
@@ -204,7 +204,7 @@
                                 "x": 190.5,
                                 "y": 100.33
                             },
-                            "uuid": "5fec9cd6-8738-49bf-8a3c-15e0fda75a8a"
+                            "uuid": "f550d79f-4fdb-4726-a7b3-269216343b4a"
                         }
                     ],
                     "severity": "warning",
@@ -219,7 +219,7 @@
                                 "x": 190.5,
                                 "y": 158.75
                             },
-                            "uuid": "cb8630f7-4141-47ba-a7e5-0ca11e554d46"
+                            "uuid": "16f37553-cb45-4da7-aa4a-8655fda856db"
                         }
                     ],
                     "severity": "warning",
@@ -234,7 +234,7 @@
                                 "x": 190.5,
                                 "y": 217.17
                             },
-                            "uuid": "ef9d9ab7-9503-4a46-b456-b96666f8777b"
+                            "uuid": "50f03572-dcaf-4d4f-bc3e-515ef7f8c508"
                         }
                     ],
                     "severity": "warning",
@@ -249,7 +249,7 @@
                                 "x": 261.62,
                                 "y": 41.91
                             },
-                            "uuid": "2f061e95-3843-492d-b716-9d955c2aa711"
+                            "uuid": "455023e8-b588-4778-976b-826e6288f010"
                         }
                     ],
                     "severity": "warning",
@@ -264,7 +264,7 @@
                                 "x": 261.62,
                                 "y": 100.33
                             },
-                            "uuid": "dc90d064-d4ae-4931-8ea9-380c511c6684"
+                            "uuid": "30c588d0-26bb-4880-a200-f0729c264f37"
                         }
                     ],
                     "severity": "warning",
@@ -279,7 +279,7 @@
                                 "x": 261.62,
                                 "y": 158.75
                             },
-                            "uuid": "2eeac291-ff1d-40de-a7ab-916de5dc00ba"
+                            "uuid": "dc7e8df6-09a4-4237-8902-1ffc7078b08c"
                         }
                     ],
                     "severity": "warning",
@@ -294,7 +294,7 @@
                                 "x": 332.74,
                                 "y": 41.91
                             },
-                            "uuid": "56b1afc4-18b0-4a76-a42b-672a538df22f"
+                            "uuid": "f414d303-451f-45e1-aab6-813cacd71fdd"
                         }
                     ],
                     "severity": "warning",
@@ -309,7 +309,7 @@
                                 "x": 332.74,
                                 "y": 100.33
                             },
-                            "uuid": "11808b98-8fa6-4f5c-8536-e600c99dc8ff"
+                            "uuid": "20ae28f5-5622-42f9-87a0-5718efa03e1c"
                         }
                     ],
                     "severity": "warning",
@@ -324,7 +324,7 @@
                                 "x": 332.74,
                                 "y": 158.75
                             },
-                            "uuid": "ba866063-68df-4a71-9046-2ca9aab8f48a"
+                            "uuid": "47b4a5ad-e1a1-4680-b772-19fff1406163"
                         }
                     ],
                     "severity": "warning",

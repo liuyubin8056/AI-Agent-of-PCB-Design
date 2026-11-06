@@ -1,30 +1,40 @@
 {
   "spec": {
     "title": "Arduino 最小系统板",
-    "summary": "帮我设计一块 Arduino 最小系统板，带电源指示灯和一路 I2C 传感器接口，7~12V 供电",
+    "summary": "一块可 7~12V 外部供电、带电源指示与 I2C 传感器接口的 Arduino 兼容最小系统板。",
     "functions": [
-      "兼容 Arduino 的 MCU 最小系统",
-      "I2C 传感器接入",
-      "传感器接入",
-      "LED 状态指示",
-      "稳压供电",
-      "7~12V 输入稳压到 5V"
+      "提供 Arduino 兼容主控最小系统运行环境（复位、时钟、启动配置）",
+      "板载电源指示，上电即亮",
+      "一路 I2C 传感器接口，含总线供电与上拉",
+      "7~12V 直流输入经板载稳压转为系统工作电压",
+      "引出主控可用 I/O 与调试/下载通道，便于二次开发"
     ],
     "supply_rails": [
       "+5V",
-      "GND"
+      "GND",
+      "+3.3V"
     ],
     "interfaces": [
-      "GPIO 排针",
-      "I2C"
+      "I2C",
+      "UART",
+      "GPIO",
+      "ICSP",
+      "外部直流电源输入"
     ],
     "key_parts": [
-      "ATmega328P",
-      "AMS1117-5.0"
+      "Arduino 兼容主控芯片（ATmega 系列）",
+      "线性稳压器（7~12V 转 5V）",
+      "16MHz 晶振",
+      "复位按键与上拉复位电路",
+      "电源指示 LED 及限流电阻",
+      "I2C 总线上拉电阻",
+      "I2C 接口连接器",
+      "直流电源输入端子或插座",
+      "去耦与滤波电容"
     ],
     "constraints": {
-      "供电": "7~12V 直流输入",
-      "尺寸": "约 60 x 40 mm"
+      "尺寸": "小型板卡，约 50mm × 35mm 量级，单板布局",
+      "供电": "外部直流 7~12V 输入，板载稳压至 +5V 系统电压，并具备反接与过流基本防护"
     }
   },
   "bom": [
@@ -119,7 +129,7 @@
     {
       "ref": "C6",
       "symbol": "pcbagent:CAP",
-      "value": "10uF",
+      "value": "100nF",
       "footprint": "Capacitor_SMD:C_0603_1608Metric",
       "role": "输入滤波",
       "note": "抑制上电冲击"
@@ -127,7 +137,7 @@
     {
       "ref": "C7",
       "symbol": "pcbagent:CAP",
-      "value": "10uF",
+      "value": "100nF",
       "footprint": "Capacitor_SMD:C_0603_1608Metric",
       "role": "输出滤波",
       "note": "稳定 5V 输出"
@@ -135,7 +145,7 @@
     {
       "ref": "R2",
       "symbol": "pcbagent:RES",
-      "value": "330",
+      "value": "1k",
       "footprint": "Resistor_SMD:R_0603_1608Metric",
       "role": "LED 限流",
       "note": "限制 LED 电流约 10mA"
@@ -143,7 +153,7 @@
     {
       "ref": "D1",
       "symbol": "pcbagent:LED",
-      "value": "LED-Green",
+      "value": "Green",
       "footprint": "LED_SMD:LED_0603_1608Metric",
       "role": "状态指示灯",
       "note": "心跳 / 状态指示"
@@ -296,7 +306,7 @@
       "led_indicator",
       "i2c_sensor"
     ],
-    "selection_source": "heuristic",
+    "selection_source": "llm",
     "build_log": [
       "主控 U1 使用 16MHz 晶振"
     ]

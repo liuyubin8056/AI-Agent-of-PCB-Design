@@ -15,9 +15,9 @@ python -m pcb_agent "帮我设计一块 Arduino 最小系统板，带指示灯�
 产物：runs/<时间戳>/board.kicad_sch  bom.csv  design.json  summary.json  trace.jsonl
 ```
 
-当前进度：**W1–W6 已完成**。骨架、MVP、审查闭环、追问改需求均可用，并已通过 **KiCad
-真机验证**：从生成的原理图导出网表，与 IR 逐引脚一致（差异 0 条），ERC **0 error**。
-DRC 闭环与报告留 W7–W8。详见下文「六、八周排期」。
+当前进度：**W1–W7 主体完成**。离线与真实 LLM 两条路径都跑通：一句话需求 → 18 器件 /
+11 网络 / 48 连接点，**ERC 0 error**，从原理图导出的网表与 IR **逐引脚一致（差异 0）**，
+故障注入能 2 轮自愈。剩下报告、视频与 PCB 侧 DRC。详见下文「六、八周排期」。
 
 ---
 
@@ -101,6 +101,32 @@ kicad-cli sch export netlist --format kicadsexpr -o board.net examples/board.kic
 kicad-cli sch erc --format json --output erc.json examples/board.kicad_sch
 python -m pytest tests/test_kicad.py -q
 ```
+
+### 真实 LLM 实测（2026-11-06）
+
+接入学校算力平台（OpenAI 兼容，`ByteDance-volcengine/DeepSeek-V4.1-Flash`）后的实测数据：
+
+| 场景 | 结果 | 闭环轮次 | LLM 调用 | tokens | 耗时 |
+|---|---|---|---|---|---|
+| 基线：Arduino 最小系统 + LED + I2C + 7~12V | 18 器件 / 11 网络 / 48 连接点，0 error | 1 | 2 | 2556 | 17.8 s |
+| 故障注入：删掉一颗去耦电容 | 自动补回，0 error | 2 | 3 | 3994 | 35.8 s |
+| 简化需求：不要指示灯、不要传感器 | 13 器件 / 7 网络 / 33 连接点，0 error | 1 | 2 | — | — |
+| 追问修订：把 C3 换成 100nF | 只改值，其余不动 | 1 | 1 | — | 37 s |
+
+两次调用 = 需求分析 1 次 + 电路设计 1 次；闭环轮次增加时每次多 1 次评审调用。
+同一份 `summary.json` 里能看到 `llm_usage`，报告里的实验数据直接取这里。
+
+**真实 LLM 暴露并修掉的三个 bug**（都写成了回归测试）：
+
+1. 模型给 `add_part` 写 `Device:C`（KiCad 官方库名），库里没有 → `add_part` 失败但配套
+   `connect` 仍执行，留下「接了线但器件不存在」的悬空引用 `C9`，一次产生 5 个错误。
+   修法：补丁改两阶段原子执行（预解析 symbol → 失败的位号整组丢弃），并给器件库加
+   KiCad 官方库名别名（`Device:C` / `Device:R` / `Device:LED` …）。
+2. 模型 `add_part ref=C1` 却 `connect C8.1`（位号笔误）→ 白跑一轮。修法：本批只有一个新增
+   器件时按前缀重定向笔误位号；没有 `add_part` 支撑的 `connect` 一律剔除。
+3. 追问「加一颗 10uF 电容」时模型只 `add_part` 不 `connect`，新增器件电气上是死的，
+   而当时只算 warning。修法：新增 `PART_UNCONNECTED` 规则（error 级），并让 `revise`
+   也走返修闭环——实测从「留下 2 个错误」变成「2 轮自动接好线」。
 
 ### 与课程「五步走」的对应
 
@@ -248,7 +274,7 @@ analyst → designer → [render + validate + kicad] → critic → apply patch 
 
 - [x] 安装 KiCad，按 `docs/kicad-notes.md` 第 4 节清单验证 `.kicad_sch` 能打开
 - [x] 跑 `kicad-cli sch export netlist`，用 `diff_with_ir` 证明「原理图 == 网表」
-- [ ] 接入真实 LLM，跑通一次 LLM 路径并记录 token 消耗
+- [x] 接入真实 LLM，跑通 LLM 路径并记录 token 消耗（2 次调用 / 2556 tokens / 17.8 s）
 - [ ] 扩充测试需求到 8 条，产出消融实验表格
 - [ ] 生成 `.kicad_pcb`，接 `pcb drc` 做进阶任务
 
@@ -264,6 +290,12 @@ analyst → designer → [render + validate + kicad] → critic → apply patch 
 - **当前器件库只有 10 个器件**，只够做最小系统类板卡；扩充方式见 `data/symbols.json`。
 - **规则兜底不等于语义理解**：离线模式靠关键词 + 否定词检测（`textutil.py`），
   复杂需求仍需要真实 LLM。
+- **LLM 接口要填到 `/v1`**：本项目的 `base_url` 会拼 `/chat/completions`，只写到域名会 404；
+  模型名必须与 `GET {base_url}/models` 返回的 `id` 完全一致（学校平台是
+  `ByteDance-volcengine/DeepSeek-V4.1-Flash`，不是 `deepseek-chat`）。
+- **LLM 接口要填到 `/v1`**：本项目的 `base_url` 会拼 `/chat/completions`，只写到域名会 404；
+  模型名必须与 `GET {base_url}/models` 返回的 `id` 完全一致（学校平台是
+  `ByteDance-volcengine/DeepSeek-V4.1-Flash`，不是 `deepseek-chat`）。
 - **只按 KiCad 8 格式输出**（版本号 `20231120`）。本机装的是 KiCad 10.0.7，向上兼容可直接
   打开；若要兼容更老的 KiCad，需要下调版本号并回归验证。
 - **无头 ERC 会报 20 条 `lib_symbol_issues`**（"当前配置不包含符号库 pcbagent"）。原因是
