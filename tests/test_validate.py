@@ -102,3 +102,14 @@ def test_missing_crystal_load_cap_caught():
         net.members = [m for m in net.members if not m.startswith(ref + ".")]
     ir.bom = [x for x in ir.bom if x.ref != ref]
     assert "XTAL_NO_LOAD_CAP" in codes(run_all(ir, LIB))
+
+
+def test_unconnected_part_caught():
+    """只 add_part 不 connect（真实 LLM 样本）必须报 error，不能只是 warning。"""
+    from pcb_agent.ir import BomItem
+
+    ir = make_ir()
+    ir.bom.append(BomItem("C99", "pcbagent:CAP", "10uF"))
+    issues = run_all(ir, LIB)
+    codes = [i.code for i in issues if i.severity == "error"]
+    assert "PART_UNCONNECTED" in codes

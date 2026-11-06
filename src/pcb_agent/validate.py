@@ -303,6 +303,33 @@ def check_floating_pins(idx: _Index) -> list[Issue]:
     return issues
 
 
+def check_unconnected_parts(idx: _Index) -> list[Issue]:
+    """一个器件所有引脚都没接 = 建模错误，不是"预留"。
+
+    真实 LLM 样本：用户说"加一颗 10uF 电容"，模型只 add_part 不 connect，
+    结果多了个电气上死掉的器件。这种错误必须是 error，否则闭环会漏过去。
+    """
+    issues = []
+    for item in idx.ir.bom:
+        if not idx.lib.has(item.symbol):
+            continue
+        if idx.lib.category(item.symbol) == "virtual":
+            continue
+        pins = idx.lib.pins(item.symbol)
+        if not pins:
+            continue
+        connected = [
+            p for p in pins if idx.pin_nets.get(f"{item.ref}.{p['number']}")
+        ]
+        if not connected:
+            issues.append(
+                Issue("PART_UNCONNECTED", ERROR,
+                      f"{item.ref} ({item.value}) 的所有 {len(pins)} 个引脚都没有连接", item.ref,
+                      "新增器件必须接进网络；若确实不用请删除")
+            )
+    return issues
+
+
 def check_ground_uniqueness(idx: _Index) -> list[Issue]:
     grounds = idx.nets_of_kind("ground")
     if len(grounds) > 1:
@@ -325,6 +352,7 @@ RULES = (
     check_crystal_load_caps,
     check_i2c_pullup,
     check_floating_pins,
+    check_unconnected_parts,
     check_ground_uniqueness,
 )
 

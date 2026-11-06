@@ -38,6 +38,7 @@ class RunResult:
     artifacts: dict[str, str] = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
     mode: str = ""
+    usage: dict[str, int] = field(default_factory=dict)
 
     @property
     def errors(self) -> int:
@@ -59,6 +60,12 @@ class RunResult:
             f"闭环：{self.rounds} 轮，{self.errors} 个错误 / {self.warnings} 个警告",
             f"模式：{self.mode}",
         ]
+        if self.usage.get("calls"):
+            lines.append(
+                f"用量：{self.usage['calls']} 次调用 / "
+                f"{self.usage['total_tokens']} tokens"
+                f"（输入 {self.usage['prompt_tokens']}，输出 {self.usage['completion_tokens']}）"
+            )
         for name, path in self.artifacts.items():
             lines.append(f"  {name}: {path}")
         if self.log:
@@ -117,24 +124,7 @@ class Orchestrator:
             if self.tracer:
                 self.tracer.event("inject_fault", fault=inject_fault, log=fault_log)
 
-        issues: list[Issue] = []
-        artifacts: dict[str, str] = {}
-        rounds = 0
-
-        for rnd in range(1, self.settings.max_rounds + 1):
-            rounds = rnd
-            issues, artifacts = self._evaluate(ir, rnd, target)
-            if not any(i.severity == ERROR for i in issues):
-                break
-            ops = self.critic.review(ir, issues, round_no=rnd)
-            if not ops:
-                log.append(f"第 {rnd} 轮评审未能给出可执行补丁，提前结束")
-                break
-            ir, patch_log = apply(ir, ops, self.lib)
-            log.extend(patch_log)
-            log.extend(self.critic.unfixable)
-        else:
-            issues, artifacts = self._evaluate(ir, rounds + 1, target)
+        ir, issues, artifacts, rounds = self._repair(ir, target, log, start_round=1)
 
         final = self._write_final(ir, target, artifacts)
         elapsed = round(time.perf_counter() - t0, 2)
@@ -148,9 +138,52 @@ class Orchestrator:
             artifacts=final,
             log=log,
             mode=self.mode,
+            usage=dict(self.llm.usage),
         )
         self._record(result, elapsed, target)
         return result
+
+    # ------------------------------------------------------------------ #
+    def _repair(
+        self,
+        ir: DesignIR,
+        target: Path,
+        log: list[str],
+        start_round: int = 1,
+    ) -> tuple[DesignIR, list[Issue], dict[str, str], int]:
+        """「评估 - 评审 - 应用补丁」闭环，不超过 max_rounds 轮。
+
+        design 与 revise 共用，保证「追问引入的新错误」也会被修掉。
+        """
+        rounds = start_round - 1
+        issues: list[Issue] = []
+        artifacts: dict[str, str] = {}
+        dirty = False
+
+        while rounds - start_round + 1 < self.settings.max_rounds:
+            rounds += 1
+            issues, artifacts = self._evaluate(ir, rounds, target)
+            dirty = False
+            if not any(i.severity == ERROR for i in issues):
+                break
+            ops = self.critic.review(ir, issues, round_no=rounds)
+            if not ops:
+                log.append(f"第 {rounds} 轮评审未能给出可执行补丁，提前结束")
+                break
+            res = apply(ir, ops, self.lib)
+            ir = res.ir
+            log.extend(res.log)
+            log.extend(self.critic.unfixable)
+            dirty = True
+            if res.applied == 0:
+                log.append(f"第 {rounds} 轮补丁全部被拒（{res.rejected} 条），提前结束")
+                break
+
+        if dirty:
+            # 最后一轮应用过补丁但还没评估，补一次以拿到真实状态
+            rounds += 1
+            issues, artifacts = self._evaluate(ir, rounds, target)
+        return ir, issues, artifacts, rounds
 
     # ------------------------------------------------------------------ #
     def revise(
@@ -171,19 +204,26 @@ class Orchestrator:
             return RunResult(request, ir.spec, ir, issues, 0, artifacts,
                              ["未能从修改要求中解析出任何操作"], self.mode)
 
-        new_ir, patch_log = apply(ir, ops, self.lib)
+        patch_res = apply(ir, ops, self.lib)
+        new_ir, patch_log = patch_res.ir, patch_res.log
         new_ir.meta["revisions"] = list(ir.meta.get("revisions") or []) + [request]
-        issues, artifacts = self._evaluate(new_ir, 1, target)
+        if patch_res.applied == 0:
+            patch_log.append(f"补丁全部被拒（{patch_res.rejected} 条），设计未改动")
+        # 追问可能引入新错误（例如只加器件不接线），所以修订后同样要走返修闭环
+        new_ir, issues, artifacts, rounds = self._repair(
+            new_ir, target, patch_log, start_round=1
+        )
         final = self._write_final(new_ir, target, artifacts)
         result = RunResult(
             request=request,
             spec=new_ir.spec,
             ir=new_ir,
             issues=issues,
-            rounds=1,
+            rounds=rounds,
             artifacts=final,
             log=patch_log,
             mode=self.mode,
+            usage=dict(self.llm.usage),
         )
         if self.tracer:
             self.tracer.event("revise", request=request, ops=[o.to_dict() for o in ops])
@@ -322,6 +362,7 @@ class Orchestrator:
             "nets": len(result.ir.nets),
             "elapsed_s": elapsed,
             "kicad_cli": self.gate.available,
+            "llm_usage": dict(self.llm.usage),
             "issues": [i.to_dict() for i in result.issues],
             "log": result.log,
         }
