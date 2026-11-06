@@ -158,7 +158,7 @@ python -m pcb_agent.ablation --offline --no-kicad # 冒烟，不烧 token
 
 ### 消融实验结果（2026-11-06 跑，8 用例 × 4 配置）
 
-> 数据源：`runs/ablation-final/ablation.md`（跑批命令见上一节）。每组配置在 8 条需求上
+> 数据源：`docs/ablation-2026-11-06.md`，原始明细见 `ablation.csv`（跑批命令见上一节）。每组配置在 8 条需求上
 > 各注入一处可检测故障（去耦电容 / I2C 上拉 / 复位上拉），再交给该组的返修方式处理。
 
 | 配置 | 说明 | 零错误率 | 平均错误 | 平均轮次 | 平均调用 | 平均 tokens | 平均耗时 | 选型准确率 |
