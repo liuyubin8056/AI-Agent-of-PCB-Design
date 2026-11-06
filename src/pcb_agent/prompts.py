@@ -11,6 +11,8 @@ from __future__ import annotations
 from .library import Library
 from .subcircuits import subcircuits_prompt_text
 
+SEP = "\n"
+
 ANALYST_SYSTEM = """你是资深硬件需求分析师。把用户的一句话需求，转写成机器可读的板级规格。
 
 只输出 JSON，不要解释，不要 Markdown 代码块。字段：
@@ -67,7 +69,9 @@ CRITIC_SYSTEM = """你是电路评审专家。给你一份设计的问题清单�
 2. 能用 set_value 解决的，不要 remove + add；
 3. add_part 之后必须补上 connect，把新器件接到正确的网络上；
 4. 一次最多 6 个补丁；
-5. 无法修复的问题，用 {"op": "note", "note": "原因"} 说明，不要瞎改。
+5. add_part 的 symbol **必须**取自下面给出的器件库目录（形如 pcbagent:CAP），
+   不要写 Device:C / Device:R 这类 KiCad 官方库名，写了会被拒绝；
+6. 无法修复的问题，用 {"op": "note", "note": "原因"} 说明，不要瞎改。
 """
 
 
@@ -97,14 +101,24 @@ def designer_user(spec_json: str, lib: Library, feedback: str = "") -> str:
     return "\n".join(x for x in parts if x is not None)
 
 
-def critic_user(ir_summary: str, issues_text: str) -> str:
-    return (
-        "## 当前设计概况\n"
-        f"{ir_summary}\n\n"
-        "## 校验发现的问题\n"
-        f"{issues_text}\n\n"
-        "请输出最小修改补丁 JSON。"
-    )
+def critic_user(ir_summary: str, issues_text: str, lib: Library, bom_text: str = "") -> str:
+    parts = [
+        "## 当前设计概况",
+        ir_summary,
+        "",
+        "## 器件库目录（add_part 的 symbol 只能从这里取）",
+        lib.catalog_text(),
+        "",
+    ]
+    if bom_text:
+        parts += ["## 当前 BOM（位号 | 值 | 符号）", bom_text, ""]
+    parts += [
+        "## 校验发现的问题",
+        issues_text,
+        "",
+        "请输出最小修改补丁 JSON。",
+    ]
+    return SEP.join(parts)
 
 
 REVISE_SYSTEM = """你是设计变更助手。用户会对现有设计提出修改要求。
@@ -115,7 +129,10 @@ REVISE_SYSTEM = """你是设计变更助手。用户会对现有设计提出修�
 规则：
 1. 只改用户明确提到的东西；
 2. 用户说「换成 100nF」这类只改值时，用 set_value，不要新增器件；
-3. 位号必须来自给定的 BOM。"""
+3. 位号必须来自给定的 BOM；
+4. **add_part 必须配 connect**：新增器件后，要用 connect 把它接到正确的网络上，
+   否则这个器件电气上是死的，校验会直接报错；
+5. symbol 只能取自器件库目录（形如 pcbagent:CAP），不要写 Device:C。"""
 
 
 def revise_user(request: str, ir_summary: str, bom_text: str) -> str:

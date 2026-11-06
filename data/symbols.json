@@ -8,36 +8,154 @@
       "value": "ATmega328P-PU",
       "footprint": "Package_DIP:DIP-28_W7.62mm",
       "category": "mcu",
-      "keywords": ["mcu", "单片机", "avr", "arduino", "atmega"],
+      "keywords": [
+        "mcu",
+        "单片机",
+        "avr",
+        "arduino",
+        "atmega"
+      ],
       "pins": [
-        { "number": "1", "name": "~RESET/PC6", "type": "input" },
-        { "number": "2", "name": "PD0/RXD", "type": "bidirectional" },
-        { "number": "3", "name": "PD1/TXD", "type": "bidirectional" },
-        { "number": "4", "name": "PD2", "type": "bidirectional" },
-        { "number": "5", "name": "PD3", "type": "bidirectional" },
-        { "number": "6", "name": "PD4", "type": "bidirectional" },
-        { "number": "7", "name": "VCC", "type": "power_in" },
-        { "number": "8", "name": "GND", "type": "power_in" },
-        { "number": "9", "name": "PB6/XTAL1", "type": "input" },
-        { "number": "10", "name": "PB7/XTAL2", "type": "output" },
-        { "number": "11", "name": "PD5", "type": "bidirectional" },
-        { "number": "12", "name": "PD6", "type": "bidirectional" },
-        { "number": "13", "name": "PD7", "type": "bidirectional" },
-        { "number": "14", "name": "PB0", "type": "bidirectional" },
-        { "number": "15", "name": "PB1", "type": "bidirectional" },
-        { "number": "16", "name": "PB2", "type": "bidirectional" },
-        { "number": "17", "name": "PB3/MOSI", "type": "bidirectional" },
-        { "number": "18", "name": "PB4/MISO", "type": "bidirectional" },
-        { "number": "19", "name": "PB5/SCK", "type": "bidirectional" },
-        { "number": "20", "name": "AVCC", "type": "power_in" },
-        { "number": "21", "name": "AREF", "type": "passive" },
-        { "number": "22", "name": "GND", "type": "power_in" },
-        { "number": "23", "name": "PC0", "type": "bidirectional" },
-        { "number": "24", "name": "PC1", "type": "bidirectional" },
-        { "number": "25", "name": "PC2", "type": "bidirectional" },
-        { "number": "26", "name": "PC3", "type": "bidirectional" },
-        { "number": "27", "name": "PC4/SDA", "type": "bidirectional" },
-        { "number": "28", "name": "PC5/SCL", "type": "bidirectional" }
+        {
+          "number": "1",
+          "name": "~RESET/PC6",
+          "type": "input"
+        },
+        {
+          "number": "2",
+          "name": "PD0/RXD",
+          "type": "bidirectional"
+        },
+        {
+          "number": "3",
+          "name": "PD1/TXD",
+          "type": "bidirectional"
+        },
+        {
+          "number": "4",
+          "name": "PD2",
+          "type": "bidirectional"
+        },
+        {
+          "number": "5",
+          "name": "PD3",
+          "type": "bidirectional"
+        },
+        {
+          "number": "6",
+          "name": "PD4",
+          "type": "bidirectional"
+        },
+        {
+          "number": "7",
+          "name": "VCC",
+          "type": "power_in"
+        },
+        {
+          "number": "8",
+          "name": "GND",
+          "type": "power_in"
+        },
+        {
+          "number": "9",
+          "name": "PB6/XTAL1",
+          "type": "input"
+        },
+        {
+          "number": "10",
+          "name": "PB7/XTAL2",
+          "type": "output"
+        },
+        {
+          "number": "11",
+          "name": "PD5",
+          "type": "bidirectional"
+        },
+        {
+          "number": "12",
+          "name": "PD6",
+          "type": "bidirectional"
+        },
+        {
+          "number": "13",
+          "name": "PD7",
+          "type": "bidirectional"
+        },
+        {
+          "number": "14",
+          "name": "PB0",
+          "type": "bidirectional"
+        },
+        {
+          "number": "15",
+          "name": "PB1",
+          "type": "bidirectional"
+        },
+        {
+          "number": "16",
+          "name": "PB2",
+          "type": "bidirectional"
+        },
+        {
+          "number": "17",
+          "name": "PB3/MOSI",
+          "type": "bidirectional"
+        },
+        {
+          "number": "18",
+          "name": "PB4/MISO",
+          "type": "bidirectional"
+        },
+        {
+          "number": "19",
+          "name": "PB5/SCK",
+          "type": "bidirectional"
+        },
+        {
+          "number": "20",
+          "name": "AVCC",
+          "type": "power_in"
+        },
+        {
+          "number": "21",
+          "name": "AREF",
+          "type": "passive"
+        },
+        {
+          "number": "22",
+          "name": "GND",
+          "type": "power_in"
+        },
+        {
+          "number": "23",
+          "name": "PC0",
+          "type": "bidirectional"
+        },
+        {
+          "number": "24",
+          "name": "PC1",
+          "type": "bidirectional"
+        },
+        {
+          "number": "25",
+          "name": "PC2",
+          "type": "bidirectional"
+        },
+        {
+          "number": "26",
+          "name": "PC3",
+          "type": "bidirectional"
+        },
+        {
+          "number": "27",
+          "name": "PC4/SDA",
+          "type": "bidirectional"
+        },
+        {
+          "number": "28",
+          "name": "PC5/SCL",
+          "type": "bidirectional"
+        }
       ]
     },
     "pcbagent:XTAL": {
@@ -46,10 +164,23 @@
       "value": "16MHz",
       "footprint": "Crystal:Crystal_HC49-4H_Vertical",
       "category": "clock",
-      "keywords": ["晶振", "crystal", "xtal", "时钟"],
+      "keywords": [
+        "晶振",
+        "crystal",
+        "xtal",
+        "时钟"
+      ],
       "pins": [
-        { "number": "1", "name": "1", "type": "passive" },
-        { "number": "2", "name": "2", "type": "passive" }
+        {
+          "number": "1",
+          "name": "1",
+          "type": "passive"
+        },
+        {
+          "number": "2",
+          "name": "2",
+          "type": "passive"
+        }
       ]
     },
     "pcbagent:CAP": {
@@ -58,10 +189,23 @@
       "value": "100nF",
       "footprint": "Capacitor_SMD:C_0603_1608Metric",
       "category": "passive",
-      "keywords": ["电容", "cap", "capacitor", "去耦"],
+      "keywords": [
+        "电容",
+        "cap",
+        "capacitor",
+        "去耦"
+      ],
       "pins": [
-        { "number": "1", "name": "1", "type": "passive" },
-        { "number": "2", "name": "2", "type": "passive" }
+        {
+          "number": "1",
+          "name": "1",
+          "type": "passive"
+        },
+        {
+          "number": "2",
+          "name": "2",
+          "type": "passive"
+        }
       ]
     },
     "pcbagent:RES": {
@@ -70,10 +214,23 @@
       "value": "10k",
       "footprint": "Resistor_SMD:R_0603_1608Metric",
       "category": "passive",
-      "keywords": ["电阻", "res", "resistor", "上拉"],
+      "keywords": [
+        "电阻",
+        "res",
+        "resistor",
+        "上拉"
+      ],
       "pins": [
-        { "number": "1", "name": "1", "type": "passive" },
-        { "number": "2", "name": "2", "type": "passive" }
+        {
+          "number": "1",
+          "name": "1",
+          "type": "passive"
+        },
+        {
+          "number": "2",
+          "name": "2",
+          "type": "passive"
+        }
       ]
     },
     "pcbagent:LED": {
@@ -82,10 +239,22 @@
       "value": "LED-Green",
       "footprint": "LED_SMD:LED_0603_1608Metric",
       "category": "indicator",
-      "keywords": ["led", "发光二极管", "指示灯"],
+      "keywords": [
+        "led",
+        "发光二极管",
+        "指示灯"
+      ],
       "pins": [
-        { "number": "1", "name": "K", "type": "passive" },
-        { "number": "2", "name": "A", "type": "passive" }
+        {
+          "number": "1",
+          "name": "K",
+          "type": "passive"
+        },
+        {
+          "number": "2",
+          "name": "A",
+          "type": "passive"
+        }
       ]
     },
     "pcbagent:SW_PUSH": {
@@ -94,10 +263,23 @@
       "value": "SW_PUSH",
       "footprint": "Button_Switch_SMD:SW_SPST_B3U-1000P",
       "category": "input",
-      "keywords": ["按键", "reset", "复位", "switch"],
+      "keywords": [
+        "按键",
+        "reset",
+        "复位",
+        "switch"
+      ],
       "pins": [
-        { "number": "1", "name": "1", "type": "passive" },
-        { "number": "2", "name": "2", "type": "passive" }
+        {
+          "number": "1",
+          "name": "1",
+          "type": "passive"
+        },
+        {
+          "number": "2",
+          "name": "2",
+          "type": "passive"
+        }
       ]
     },
     "pcbagent:CONN_2": {
@@ -106,10 +288,23 @@
       "value": "Conn_01x02",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
       "category": "connector",
-      "keywords": ["接口", "connector", "排针", "电源输入"],
+      "keywords": [
+        "接口",
+        "connector",
+        "排针",
+        "电源输入"
+      ],
       "pins": [
-        { "number": "1", "name": "Pin_1", "type": "passive" },
-        { "number": "2", "name": "Pin_2", "type": "passive" }
+        {
+          "number": "1",
+          "name": "Pin_1",
+          "type": "passive"
+        },
+        {
+          "number": "2",
+          "name": "Pin_2",
+          "type": "passive"
+        }
       ]
     },
     "pcbagent:LDO_AMS1117_5V": {
@@ -118,11 +313,28 @@
       "value": "AMS1117-5.0",
       "footprint": "Package_TO_SOT_SMD:SOT-223-3_TabPin2",
       "category": "power",
-      "keywords": ["ldo", "稳压", "ams1117", "电源"],
+      "keywords": [
+        "ldo",
+        "稳压",
+        "ams1117",
+        "电源"
+      ],
       "pins": [
-        { "number": "1", "name": "GND", "type": "power_in" },
-        { "number": "2", "name": "VOUT", "type": "power_out" },
-        { "number": "3", "name": "VIN", "type": "power_in" }
+        {
+          "number": "1",
+          "name": "GND",
+          "type": "power_in"
+        },
+        {
+          "number": "2",
+          "name": "VOUT",
+          "type": "power_out"
+        },
+        {
+          "number": "3",
+          "name": "VIN",
+          "type": "power_in"
+        }
       ]
     },
     "pcbagent:SENSOR_I2C": {
@@ -131,12 +343,34 @@
       "value": "I2C_SENSOR",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical",
       "category": "sensor",
-      "keywords": ["i2c", "传感器", "sensor", "sda", "scl"],
+      "keywords": [
+        "i2c",
+        "传感器",
+        "sensor",
+        "sda",
+        "scl"
+      ],
       "pins": [
-        { "number": "1", "name": "VCC", "type": "power_in" },
-        { "number": "2", "name": "GND", "type": "power_in" },
-        { "number": "3", "name": "SDA", "type": "bidirectional" },
-        { "number": "4", "name": "SCL", "type": "input" }
+        {
+          "number": "1",
+          "name": "VCC",
+          "type": "power_in"
+        },
+        {
+          "number": "2",
+          "name": "GND",
+          "type": "power_in"
+        },
+        {
+          "number": "3",
+          "name": "SDA",
+          "type": "bidirectional"
+        },
+        {
+          "number": "4",
+          "name": "SCL",
+          "type": "input"
+        }
       ]
     },
     "pcbagent:PWR_FLAG": {
@@ -145,9 +379,16 @@
       "value": "PWR_FLAG",
       "footprint": "",
       "category": "virtual",
-      "keywords": ["power flag", "erc"],
+      "keywords": [
+        "power flag",
+        "erc"
+      ],
       "pins": [
-        { "number": "1", "name": "pwr", "type": "power_out" }
+        {
+          "number": "1",
+          "name": "pwr",
+          "type": "power_out"
+        }
       ]
     }
   },
@@ -161,6 +402,21 @@
     "xtal": "pcbagent:XTAL",
     "ldo": "pcbagent:LDO_AMS1117_5V",
     "sw": "pcbagent:SW_PUSH",
-    "conn": "pcbagent:CONN_2"
+    "conn": "pcbagent:CONN_2",
+    "device:c": "pcbagent:CAP",
+    "device:c_small": "pcbagent:CAP",
+    "device:c_polarized": "pcbagent:CAP",
+    "device:cp": "pcbagent:CAP",
+    "device:r": "pcbagent:RES",
+    "device:r_small": "pcbagent:RES",
+    "device:led": "pcbagent:LED",
+    "device:crystal": "pcbagent:XTAL",
+    "device:crystal_gt": "pcbagent:XTAL",
+    "device:sw_push": "pcbagent:SW_PUSH",
+    "switch:sw_push": "pcbagent:SW_PUSH",
+    "device:conn_01x02": "pcbagent:CONN_2",
+    "connector:conn_01x02": "pcbagent:CONN_2",
+    "regulator_linear:ams1117-5.0": "pcbagent:LDO_AMS1117_5V",
+    "regulator_linear:ams1117": "pcbagent:LDO_AMS1117_5V"
   }
 }
