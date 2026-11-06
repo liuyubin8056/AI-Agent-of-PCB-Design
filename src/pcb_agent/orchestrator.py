@@ -115,7 +115,7 @@ class Orchestrator:
 
         t0 = time.perf_counter()
         spec = self.analyst.analyze(request, round_no=1)
-        ir = self.designer.design(spec, [], round_no=1)
+        ir = self.designer.design(spec, [], round_no=1, raw_request=request)
 
         log: list[str] = []
         if inject_fault:
