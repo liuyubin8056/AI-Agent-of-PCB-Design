@@ -118,9 +118,36 @@ library**），用 `ctypes` 调 libngspice 的 C API。既没有 `ngspice.exe` �
 - 按键默认按**断开**处理，按下是瞬态事件，`.op` 里没有意义；
 - AREF 显示 0 V：芯片内部基准没建模，只挂了一颗 100nF。
 
-下一步（步骤 3）才是重点：把这些数字变成断言（`SIM_RAIL_OUT_OF_RANGE`、
-`SIM_LED_CURRENT`、`SIM_RESET_TAU`…），转成 `Issue` 接进现有返修闭环。
-现在只是"能出数"，还没有"能判对错"。
+### 仿真断言：把实测值变成能触发返修的问题
+
+五条判据，代码里是 `simcheck.py`，门限集中在 `data/spice_models.json` 的 `limits`：
+
+| Issue code | 判据 | 抓什么错 |
+|---|---|---|
+| `SIM_RAIL_DEAD` | 电压 < 期望值的 50% | 稳压器没工作 / 轨被短死 |
+| `SIM_RAIL_OUT_OF_RANGE` | 与期望值偏差 > 5% | 稳压值错、压差不足 |
+| `SIM_LED_OVERDRIVE` | 电流 > 20 mA | 限流电阻过小（灯会烧） |
+| `SIM_LED_OFF` | 电流 < 0.5 mA | 电阻过大 / 驱动没拉开 / 极性反 |
+| `SIM_REGULATOR_OVERHEAT` | (Vin−Vout)×Iin > 0.8 W | SOT-223 不加散热片会烫 |
+| `SIM_UNMODELED` | 有器件没模型 | 覆盖率透明，不假装全测了 |
+
+实测一次完整闭环（`--inject-fault value`）：
+
+```
+注入故障：R2 改小 20 倍（值错误，连接不变）
+R2 值 330 -> 16.5           # 故障态：LED 电流 61.8 mA
+R2 值 16.5 -> 203.94        # 按实测电流反推阻值，一步回到合规区间
+闭环：2 轮，0 个错误
+```
+
+注意这条故障 **ERC 0 error、DRC 0 error、11 条规则校验全绿**——只有仿真能看见。
+修法也不是"乘 10 试一次"，而是 `R_new = R_old × I_实测 / I_目标`。
+
+**为什么没有 RESET_TAU / I2C_RISE / DECOUPLE_Z**：这块板的 RESET 只有上拉没有
+电容（没有 RC 可言）；去耦电容是理想电容，AC 阻抗恒为 0，测了也永远通过；
+I2C 上升时间要单独做小信号瞬态分析。**宁可不写，也不写一条永远绿的假断言**，
+这三条留作后续（需要先给电容补 ESR、给总线补集总电容模型）。
+
 
 ### 自动布局布线（进阶任务 ★★★★）
 
@@ -298,6 +325,34 @@ python -m pcb_agent.ablation --offline --no-kicad # 冒烟，不烧 token
    跨模块约束冲突）才能体现 —— 这也是 W7 要补的实验：需要构造规则抓不到的故障类型。
    不做这个补充实验就宣称多 Agent 更好，是不诚实的。
 
+### 补做：值错误 + 仿真闸门（2026-11-09）
+
+上一轮的结论里有一条对方案不利：**D 组（多 Agent）相对 B 组没有优势**，原因是注入
+的三种故障都在规则覆盖范围内。这一轮补上了规则抓不到的故障类型，并新增 **E 组**：
+
+| 配置 | 需求分析 | 返修方式 | 仿真结论 | 与 D 的差别 |
+|---|---|---|---|---|
+| D | LLM | LLM 评审 + 问题清单 | 不进闭环 | — |
+| **E** | LLM | LLM 评审 + 问题清单 | **进闭环** | 只多一个变量 |
+
+故障改为 `value`：把 LED 限流电阻改小 20 倍，**连接一点没动**，所以 ERC/DRC/规则校验全绿。
+3 个用例实测（离线执行，避免 LLM 抖动）：
+
+| 用例 | 配置 | 结构错误 | **仿真错误** | 轮次 |
+|---|---|---|---|---|
+| C1 | B | 0 | **1** | 1 |
+| C1 | E | 0 | **0** | 2 |
+| C4 | B | 0 | **1** | 1 |
+| C4 | E | 0 | **0** | 2 |
+| C6 | B | 0 | **1** | 1 |
+| C6 | E | 0 | **0** | 2 |
+
+结论：**B 组不是"通过"，只是"看不见"**。E 组用同样的返修逻辑，多一个仿真证据就把
+问题修干净了。这才是多 Agent + 工具的完整价值证明——之前缺的不是 Agent 数量，
+是**一个能发现功能错误的工具**。
+
+命令：`python -m pcb_agent.ablation --cases 1,4,6 --configs B,E --fault value`
+
 ### 与课程「五步走」的对应
 
 | 课程要求 | 本仓库实现 |
@@ -334,14 +389,16 @@ pcb-agent/
 │   ├── pcb.py                   IR → .kicad_pcb（连接性驱动摆放）
 │   ├── router.py                两层栅格 A* 自动布线
 │   ├── ngspice.py               libngspice 封装（ctypes + 子进程隔离）
-│   ├── spice.py                 IR → SPICE deck + 工作点仿真
+│   ├── spice.py                 IR → SPICE deck
+│   ├── simulate.py              跑仿真 + 结构化报告（sim.json）
+│   ├── simcheck.py              5 条电气行为断言 → Issue
 │   ├── orchestrator.py          闭环编排、故障注入、产物落盘
 │   ├── graph_langgraph.py       LangGraph 等价实现（可选依赖）
 │   ├── trace.py                 JSONL 运行轨迹
 │   ├── textutil.py              否定词检测（规则兜底用）
 │   ├── agents/                  analyst / designer / critic
 │   └── ui/streamlit_app.py      演示界面（可选）
-└── tests/                       111 个用例（含 KiCad / ngspice 集成测试，未装自动跳过）
+└── tests/                       122 个用例（含 KiCad / ngspice 集成测试，未装自动跳过）
 ```
 
 ---
