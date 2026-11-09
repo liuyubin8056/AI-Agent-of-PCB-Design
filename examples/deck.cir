@@ -1,0 +1,63 @@
+* pcb-agent 生成的 SPICE deck：Arduino 最小系统板
+* 器件 18 个 / 网络 11 条 / 未建模 0 个
+.options TEMP=27
+
+.subckt LDO_5V vin gnd vout
+    * AMS1117-5.0 行为级模型：1.1V 压差 + 5mA 静态电流 + 输入电流随负载
+    Vos VREG VOUT 0
+    Breg VREG GND V = min(5, V(VIN)-1.1)
+    Bin VIN GND I = I(Vos) + 5m
+    Iq VOUT GND 5m
+.ends
+.subckt XTAL_16M a b
+    * 16MHz HC49 等效：Lm/Cm/Rm 串联支路 + 并联 C0
+    Lm a m 4.9m
+    Cm m b 0.02p
+    Rm m b 30
+    C0 a b 5p
+.ends
+.model DLED D(Is=1e-20 N=1.9 Rs=8)
+CU1_1 reset 0 5e-12
+RU1_7 p5v 0 2000
+CU1_9 xtal1 0 5e-12
+CU1_10 xtal2 0 5e-12
+CU1_13 led_ctrl 0 5e-12
+RU1_20 p5v 0 2000
+CU1_21 aref 0 5e-12
+CU1_27 sda 0 5e-12
+CU1_28 scl 0 5e-12
+C1 p5v 0 1e-07
+C2 p5v 0 1e-07
+R1 reset p5v 10000
+RSW1 reset 0 1e+12
+XY1 xtal1 xtal2 XTAL_16M
+C3 xtal1 0 2.2e-11
+C4 xtal2 0 2.2e-11
+C5 aref 0 1e-07
+XU2 vin_raw 0 p5v LDO_5V
+C6 vin_raw 0 1e-07
+C7 p5v 0 1e-07
+R2 led_ctrl led_a 1000
+D1 led_a 0 DLED
+RU3_1 p5v 0 10000
+CU3_3 sda 0 1e-11
+CU3_4 scl 0 1e-11
+R3 sda p5v 4700
+R4 scl p5v 4700
+Vvin_raw vin_raw 0 dc 12
+Vdrv_led_ctrl led_ctrl_d 0 dc 5
+Rdrv_led_ctrl led_ctrl_d led_ctrl 22
+Vdrv_scl scl_d 0 dc 5
+Rdrv_scl scl_d scl 22
+Vdrv_sda sda_d 0 dc 5
+Rdrv_sda sda_d sda 22
+Rlk_aref aref 0 1e+09
+Rlk_led_a led_a 0 1e+09
+Rlk_led_ctrl led_ctrl 0 1e+09
+Rlk_reset reset 0 1e+09
+Rlk_scl scl 0 1e+09
+Rlk_sda sda 0 1e+09
+Rlk_xtal1 xtal1 0 1e+09
+Rlk_xtal2 xtal2 0 1e+09
+.op
+.end

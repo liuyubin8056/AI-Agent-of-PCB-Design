@@ -1,7 +1,7 @@
 PY ?= python
 OUT ?= runs/demo
 
-.PHONY: help install demo llm test ablate clean
+.PHONY: help install demo llm test ablate sim clean
 
 help:
 	@echo "make install  安装为可编辑包"
@@ -9,6 +9,7 @@ help:
 	@echo "make llm      用真实 LLM 跑 demo（需先配好 .env）"
 	@echo "make test     运行单元测试"
 	@echo "make ablate   消融实验：8 用例 × 4 配置"
+	@echo "make sim      工作点仿真：examples/design.json -> ngspice"
 	@echo "make clean    清理运行时产物"
 
 install:

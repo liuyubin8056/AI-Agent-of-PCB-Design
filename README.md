@@ -74,6 +74,54 @@ BOM + 引脚级网表    ← subcircuits 用引脚语义 + 器件库确定性生
 > 没有用 CrewAI / AutoGen：角色对话式编排在「引脚级网表」这种强结构化任务上会发散、
 > 成本高、不可复现。多 Agent 的价值在「角色职责 + 工具权限 + 共享结构化状态」，不在聊天。
 
+### 工作点仿真（IR → SPICE → ngspice）
+
+```bash
+python -m pcb_agent.spice --design examples/design.json --out runs/sim
+```
+
+不额外装任何东西：直接用 KiCad 自带的 `ngspice.dll`（本机是 **ngspice-46 shared
+library**），用 `ctypes` 调 libngspice 的 C API。既没有 `ngspice.exe` 也不需要有。
+
+用**子进程**跑，不是为了好看：libngspice 出问题是 access violation，会带走宿主
+进程，仿真这种第三方 C 代码必须隔离。
+
+实测输出（`examples/design.json`，18 器件 / 11 网络）：
+
+| 网络 | 电压 | 手算 | 结论 |
+|---|---|---|---|
+| VIN_RAW | 12.0000 V | 12 V（外部输入） | ✅ |
+| +5V | 5.0000 V | LDO 稳压 5 V | ✅ |
+| LED_A | 2.0001 V | LED 正向压降 ≈2.0 V | ✅ |
+| RESET | 4.9999 V | 10k 上拉 / (10k+1G) × 5 V | ✅ |
+| XTAL1/2 | 0.0000 V | 未起振，直流为 0 | ✅ |
+
+| 支路 | 电流 | 手算 | 结论 |
+|---|---|---|---|
+| R2 / D1 | 2.935 / 2.936 mA | (5−2.0)/1k = 3.0 mA，再减 22Ω 驱动内阻压降 | ✅ |
+
+另外验证了压差行为：把 VIN_RAW 改成 5.5 V，输出掉到 **4.4 V**（5.5−1.1），
+而不是硬撑 5 V —— 说明 LDO 不是"永远输出 5V"的假模型。
+
+**器件怎么落到 SPICE** 全在 `data/spice_models.json`，四类：
+
+| 类型 | 器件 | 建模方式 |
+|---|---|---|
+| `R`/`C`/`D` | 电阻、电容、LED | 两端元件；LED 用 `D(Is=1e-20 N=1.9 Rs=8)`，Vf≈2V |
+| `X` | LDO、晶振 | 子电路：LDO 用 1.1V 压差 + 5mA 静态 + 输入电流随负载；晶振用 Lm/Cm/Rm+C0 |
+| `LOAD` | MCU、I2C 传感器 | 电源脚对地等效电阻（MCU 2k/脚 ≈2.5mA），信号脚对地电容 |
+| `SKIP` | 连接器、PWR_FLAG | 不建模，但**显式记入 unmodeled**，不静默当导线 |
+
+**三个不粉饰的近似**：
+
+- MCU 是数字器件，这里只有"电源脚等效负载 + GPIO 拉高"两个近似，不能替代时序仿真；
+- 按键默认按**断开**处理，按下是瞬态事件，`.op` 里没有意义；
+- AREF 显示 0 V：芯片内部基准没建模，只挂了一颗 100nF。
+
+下一步（步骤 3）才是重点：把这些数字变成断言（`SIM_RAIL_OUT_OF_RANGE`、
+`SIM_LED_CURRENT`、`SIM_RESET_TAU`…），转成 `Issue` 接进现有返修闭环。
+现在只是"能出数"，还没有"能判对错"。
+
 ### 自动布局布线（进阶任务 ★★★★）
 
 ```bash
@@ -267,6 +315,7 @@ python -m pcb_agent.ablation --offline --no-kicad # 冒烟，不烧 token
 ```
 pcb-agent/
 ├── data/symbols.json            器件库：10 个器件的引脚表、封装、关键词
+├── data/spice_models.json       器件 → SPICE 模型映射（含 LDO/晶振子电路）
 ├── docs/kicad-notes.md          KiCad 8 集成笔记与首次打开检查清单
 ├── examples/                    一次真实运行的产物（可下载的示例原理图）
 ├── src/pcb_agent/
@@ -280,13 +329,19 @@ pcb-agent/
 │   ├── patch.py                 6 个原子补丁操作
 │   ├── render.py                IR → .kicad_sch
 │   ├── kicad_gate.py            kicad-cli 网关 + s-expr 解析 + 网表比对
+│   ├── kicad_live.py            KiCad IPC 后端（推送 + 状态上报）
+│   ├── footprints.py            官方 .kicad_mod 解析
+│   ├── pcb.py                   IR → .kicad_pcb（连接性驱动摆放）
+│   ├── router.py                两层栅格 A* 自动布线
+│   ├── ngspice.py               libngspice 封装（ctypes + 子进程隔离）
+│   ├── spice.py                 IR → SPICE deck + 工作点仿真
 │   ├── orchestrator.py          闭环编排、故障注入、产物落盘
 │   ├── graph_langgraph.py       LangGraph 等价实现（可选依赖）
 │   ├── trace.py                 JSONL 运行轨迹
 │   ├── textutil.py              否定词检测（规则兜底用）
 │   ├── agents/                  analyst / designer / critic
 │   └── ui/streamlit_app.py      演示界面（可选）
-└── tests/                       54 个用例（含 KiCad 集成测试，未装自动跳过）
+└── tests/                       111 个用例（含 KiCad / ngspice 集成测试，未装自动跳过）
 ```
 
 ---

@@ -1,0 +1,20 @@
+{
+  "values": {
+    "v(p5v)": 5.0,
+    "v(vin_raw)": 12.0,
+    "v(aref)": 0.0,
+    "v(led_a)": 2.00007947,
+    "v(led_ctrl)": 4.93542235,
+    "v(reset)": 4.99994995,
+    "v(scl)": 4.99999989,
+    "v(sda)": 4.99999989,
+    "v(xtal1)": 0.0,
+    "v(xtal2)": 0.0,
+    "@r1[i]": -5.0049499e-09,
+    "@r2[i]": 0.00293534288,
+    "@d1[id]": 0.00293615734,
+    "@r3[i]": -2.32952133e-11,
+    "@r4[i]": -2.32952133e-11
+  },
+  "version": "stdout ****** stdout ** ngspice-46 : Circuit level simulation program stdout ** Compiled with KLU Direct Linear Solver stdout ** The U. C. Berkeley CAD Group stdout ** Copyright 1985-1994, Regents of the University of California. stdout ** Copyright 2001-2025, The ngspice team. stdout ** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html stdout ** Please file your bug-reports at https://ngspice.sourceforge.io/bugrep.html stdout ** Creation Date: Aug 29 2026   10:57:41 stdout"
+}
