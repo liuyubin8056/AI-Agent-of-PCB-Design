@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import math
+
 from .ir import ERROR, WARNING, DesignIR, Issue
 from .library import Library
 from .simulate import SimReport
-from .spice import expected_rail, limits
+from .spice import expected_rail, limits, pdn_probe_hz
 
 DEFAULT_LIMITS = {
     "rail_tolerance": 0.05,
@@ -18,6 +20,10 @@ DEFAULT_LIMITS = {
     "led_current_min": 0.0005,
     "led_current_max": 0.02,
     "regulator_max_w": 0.8,
+    "decouple_cap_ratio_min": 0.7,
+    "i2c_rise_max": 3.0e-7,
+    "reset_tau_min": 5.0e-4,
+    "reset_tau_max": 5.0e-3,
 }
 
 
@@ -41,6 +47,9 @@ def check(ir: DesignIR, report: SimReport, library: Library | None = None) -> li
     issues.extend(_rails(ir, report))
     issues.extend(_leds(ir, report, lib))
     issues.extend(_regulators(ir, report, lib))
+    issues.extend(_decoupling(ir, report))
+    issues.extend(_bus_rise(ir, report))
+    issues.extend(_reset_tau(ir, report))
     issues.extend(_coverage(report))
     return issues
 
@@ -155,6 +164,89 @@ def _regulators(ir: DesignIR, report: SimReport, lib: Library) -> list[Issue]:
                 )
             )
     return issues
+
+
+def _decoupling(ir: DesignIR, report: SimReport) -> list[Issue]:
+    """PDN 阻抗换算成等效电容，与设计容值对比。
+
+    阈值不写死绝对阻抗：1 MHz 处 100 nF 本身就是 1.6 Ω，绝对阈值会随板子规模误判。
+    这里问的是"设计里那些电容到底在不在、容值对不对"。
+    """
+    pdn = report.extras.get("pdn") or {}
+    if not pdn.get("ok"):
+        return []
+    rails = pdn.get("rails") or {}
+    measures = pdn.get("measures") or {}
+    ratio = _limit("decouple_cap_ratio_min")
+    freq = pdn_probe_hz()
+    node_to_net = {v: k for k, v in report.nodes.items()}
+
+    issues: list[Issue] = []
+    for key, ohms in measures.items():
+        if not key.startswith("z_") or ohms <= 0:
+            continue
+        node = key[2:]
+        design = float(rails.get(node, 0) or 0)
+        if design <= 0:
+            continue
+        effective = 1.0 / (2 * math.pi * freq * ohms)
+        if effective < ratio * design:
+            net = node_to_net.get(node, node)
+            issues.append(
+                Issue(
+                    "SIM_DECOUPLE_Z", ERROR,
+                    f"电源轨 {net} 在 {freq / 1e6:.0f} MHz 阻抗 {ohms * 1000:.0f} mΩ，"
+                    f"折算等效电容 {effective * 1e9:.0f} nF，仅为设计值 "
+                    f"{design * 1e9:.0f} nF 的 {effective / design * 100:.0f}%",
+                    net, "检查去耦电容是否真的并在该轨上、容值是否被改小、ESR 是否过大",
+                )
+            )
+    return issues
+
+
+def _bus_rise(ir: DesignIR, report: SimReport) -> list[Issue]:
+    """I2C 上升时间：上拉太弱或总线电容太大都会超限。"""
+    bus = report.extras.get("bus") or {}
+    if not bus.get("ok"):
+        return []
+    limit = _limit("i2c_rise_max")
+    node_to_net = {v: k for k, v in report.nodes.items()}
+    issues: list[Issue] = []
+    for key, seconds in (bus.get("measures") or {}).items():
+        if not key.startswith("tr_"):
+            continue
+        node = key[3:]
+        if seconds > limit:
+            net = node_to_net.get(node, node)
+            issues.append(
+                Issue(
+                    "SIM_I2C_RISE", ERROR,
+                    f"{net} 上升时间 {seconds * 1e9:.0f} ns，超过 {limit * 1e9:.0f} ns 上限",
+                    net, "把上拉电阻改小，或减少总线电容/挂载器件",
+                )
+            )
+    return issues
+
+
+def _reset_tau(ir: DesignIR, report: SimReport) -> list[Issue]:
+    """复位 RC 时间常数。设计里没有电容时该断言不适用（不报问题，也不假装通过）。"""
+    reset = report.extras.get("reset") or {}
+    if not reset.get("ok"):
+        return []
+    tau = (reset.get("measures") or {}).get("tau")
+    if tau is None:
+        return []
+    low, high = _limit("reset_tau_min"), _limit("reset_tau_max")
+    if low <= tau <= high:
+        return []
+    net = next((n.name for n in ir.nets if "RESET" in n.name.upper()), "RESET")
+    return [
+        Issue(
+            "SIM_RESET_TAU", WARNING,
+            f"{net} 时间常数 {tau * 1000:.2f} ms，超出 {low * 1000:.1f}~{high * 1000:.1f} ms",
+            net, "复位电容太小会抖、太大起不来，按 0.5~5 ms 选取",
+        )
+    ]
 
 
 def _coverage(report: SimReport) -> list[Issue]:

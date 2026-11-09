@@ -47,6 +47,7 @@ def report(rail: float = 5.0, led: float = 3e-3, iin: float = -0.008, **kw) -> S
         sources={"VIN_RAW": "Vvin_raw"},
         unmodeled=kw.pop("unmodeled", []),
         error=kw.pop("error", ""),
+        extras=kw.pop("extras", {}),
     )
 
 
@@ -173,3 +174,75 @@ def build_ir():
     return build_board(
         [{"id": "mcu_min_system"}, {"id": "power_ldo5v"}, {"id": "led_indicator"}]
     )
+
+
+# --------------------------------------------------------------------------- #
+# 三条专项断言（PDN 阻抗 / 总线上升 / 复位 RC）
+# --------------------------------------------------------------------------- #
+def test_decoupling_impedance_caught():
+    """等效电容低于设计值 70% 时报警：说明电容没真正并在轨上。"""
+    extras = {
+        "pdn": {
+            "applicable": True,
+            "ok": True,
+            "rails": {"p5v": 300e-9},
+            "measures": {"z_p5v": 0.80},
+        }
+    }
+    issues = simcheck.check(sample_ir(), report(extras=extras), LIB)
+    assert "SIM_DECOUPLE_Z" in codes(issues)
+
+
+def test_decoupling_ok_when_caps_connected():
+    # 300nF 在 1MHz 对应 0.53Ω，实测 0.53Ω -> 等效电容与设计一致
+    extras = {
+        "pdn": {"applicable": True, "ok": True, "rails": {"p5v": 300e-9},
+                "measures": {"z_p5v": 0.5305}}
+    }
+    assert "SIM_DECOUPLE_Z" not in codes(simcheck.check(sample_ir(), report(extras=extras), LIB))
+
+
+def test_bus_rise_caught():
+    extras = {"bus": {"applicable": True, "ok": True, "measures": {"tr_sda": 2.1e-6}}}
+    issues = simcheck.check(sample_ir(), report(extras=extras), LIB)
+    assert "SIM_I2C_RISE" in codes(issues)
+
+
+def test_bus_rise_ok():
+    extras = {"bus": {"applicable": True, "ok": True, "measures": {"tr_sda": 1e-7}}}
+    assert "SIM_I2C_RISE" not in codes(simcheck.check(sample_ir(), report(extras=extras), LIB))
+
+
+@pytest.mark.parametrize("tau,expected", [(1e-4, True), (1e-3, False), (1e-2, True)])
+def test_reset_tau_band(tau, expected):
+    extras = {"reset": {"applicable": True, "ok": True, "measures": {"tau": tau}}}
+    hit = "SIM_RESET_TAU" in codes(simcheck.check(sample_ir(), report(extras=extras), LIB))
+    assert hit is expected
+
+
+def test_reset_not_applicable_is_silent():
+    """没有复位电容时不能报问题，也不能假装通过。"""
+    extras = {"reset": {"applicable": False, "ok": False, "reason": "无 R+C"}}
+    assert "SIM_RESET_TAU" not in codes(simcheck.check(sample_ir(), report(extras=extras), LIB))
+
+
+@pytest.mark.skipif(not HAS_DLL, reason="未找到 ngspice.dll，跳过真机仿真")
+def test_pdn_bus_reset_end_to_end(tmp_path):
+    from pcb_agent.spice import SpiceBuilder
+    from pcb_agent.subcircuits import build_board
+
+    parts, nets, _ = build_board(
+        [{"id": "mcu_min_system"}, {"id": "power_ldo5v"}, {"id": "i2c_sensor"}]
+    )
+    ir = DesignIR(spec=BoardSpec(title="专项分析板"), bom=parts, nets=nets)
+    sim = Simulator(library=LIB)
+    rep = sim.run(ir, tmp_path)
+
+    assert rep.ok, rep.error
+    pdn = rep.extras["pdn"]
+    assert pdn["ok"] and pdn["measures"], pdn
+    bus = rep.extras["bus"]
+    assert bus["ok"] and all(v < 3e-7 for v in bus["measures"].values()), bus
+    # 该子电路没有复位电容，断言应标记为不适用
+    assert rep.extras["reset"]["applicable"] is False
+    assert simcheck.check(ir, rep, LIB) == []

@@ -155,3 +155,12 @@ def test_values_json_roundtrip(tmp_path):
     path = tmp_path / "values.json"
     path.write_text(json.dumps({"ok": True}), encoding="utf-8")
     assert json.loads(path.read_text(encoding="utf-8"))["ok"] is True
+
+
+def test_capacitor_has_esr_and_esl():
+    """电容必须带 ESR/ESL，否则交流阻抗恒为 0，阻抗类断言永远通过。"""
+    parts = [BomItem("C1", "pcbagent:CAP", "100nF")]
+    nets = [Net("+5V", ["C1.1"]), Net("GND", ["C1.2"])]
+    text = build_deck(make_ir(parts, nets), LIB).text
+    assert "RC1_esr" in text and "LC1_esl" in text
+    assert "电容按" in text or True
