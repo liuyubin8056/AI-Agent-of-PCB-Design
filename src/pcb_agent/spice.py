@@ -96,6 +96,7 @@ class SimDeck:
     vectors: list[str] = field(default_factory=list)
     currents: dict[str, str] = field(default_factory=dict)  # 位号 -> 电流向量
     sources: dict[str, str] = field(default_factory=dict)  # 电源网名 -> 理想源元件名
+    rails: dict[str, float] = field(default_factory=dict)  # 节点 -> 该轨设计电容总和(F)
     unmodeled: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -159,22 +160,8 @@ class SpiceBuilder:
     # -- 主体 ------------------------------------------------------------ #
     def build(self, ir: DesignIR, analyses: tuple[str, ...] = ("op",)) -> SimDeck:
         defaults = self.defaults
-        nodes: dict[str, str] = {}
-        used: set[str] = set()
-        for net in ir.nets:
-            node = node_name(net.name)
-            if node != "0":
-                base, k = node, 2
-                while node in used:
-                    node = f"{base}_{k}"
-                    k += 1
-                used.add(node)
-            nodes[net.name] = node
-
-        net_of_pin: dict[str, str] = {}
-        for net in ir.nets:
-            for member in net.members:
-                net_of_pin[member] = nodes[net.name]
+        nodes = self._nodes(ir)
+        net_of_pin = {m: nodes[n.name] for n in ir.nets for m in n.members}
 
         deck = SimDeck(text="", nodes=nodes)
         elements: list[str] = []
@@ -209,6 +196,204 @@ class SpiceBuilder:
         body += [f".{kind}" for kind in analyses]
         body += [".end"]
         deck.text = "\n".join(head + [""] + body) + "\n"
+        return deck
+
+    # -- 节点映射 -------------------------------------------------------- #
+    def _nodes(self, ir: DesignIR) -> dict[str, str]:
+        nodes: dict[str, str] = {}
+        used: set[str] = set()
+        for net in ir.nets:
+            node = node_name(net.name)
+            if node != "0":
+                base, k = node, 2
+                while node in used:
+                    node = f"{base}_{k}"
+                    k += 1
+                used.add(node)
+            nodes[net.name] = node
+        return nodes
+
+    def _pin_nodes(self, ir: DesignIR) -> tuple[dict[str, str], dict[str, str]]:
+        nodes = self._nodes(ir)
+        return nodes, {m: nodes[n.name] for n in ir.nets for m in n.members}
+
+    def _other_net(self, ir: DesignIR, ref: str, member: str, exclude: str) -> Net | None:
+        for net in ir.nets:
+            if net.name == exclude:
+                continue
+            if any(m.startswith(f"{ref}.") for m in net.members) and member not in net.members:
+                return net
+            if any(m.startswith(f"{ref}.") for m in net.members) and net.name != exclude:
+                return net
+        return None
+
+    # -- PDN 阻抗（去耦电容的交流阻抗） ---------------------------------- #
+    def build_pdn(self, ir: DesignIR) -> SimDeck:
+        """只保留无源 PDN（电容 + ESR/ESL + 负载电阻），注入 1A 交流电流测阻抗。
+
+        稳压器在这里被当作**开路**：理想受控源在 .ac 里会把输出阻抗压成 0，
+        测出来永远合格，那是一种假断言。这里测的是设计者能改的那部分——
+        电容组本身的阻抗，等价于"去耦电容到底在不在、容值对不对"。
+        """
+        nodes, pin_node = self._pin_nodes(ir)
+        rail_nodes = {nodes[n.name] for n in ir.nets if n.kind == "power"}
+        probe = float(self.defaults.get("pdn_probe_hz", 1e6))
+        deck = SimDeck(text="", nodes=nodes)
+        elements: list[str] = []
+        chars: dict[str, float] = {}
+
+        for item in ir.bom:
+            spec = self.map.get(item.symbol) or {}
+            kind = str(spec.get("kind", "")).upper()
+            ports = list((spec.get("pins") or {}).values())
+            if kind == "C" and len(ports) >= 2:
+                a = pin_node.get(f"{item.ref}.{_pin_of(spec, ports[0])}")
+                b = pin_node.get(f"{item.ref}.{_pin_of(spec, ports[1])}")
+                farads = parse_value(item.value) or parse_value(
+                    self.lib.default_value(item.symbol)
+                )
+                if not a or not b or not farads:
+                    continue
+                elements += self._capacitor(_elem(item.ref, "C"), a, b, farads, deck)
+                for node in (a, b):
+                    if node in rail_nodes:
+                        chars[node] = chars.get(node, 0.0) + farads
+            elif kind == "R" and len(ports) >= 2:
+                a = pin_node.get(f"{item.ref}.{_pin_of(spec, ports[0])}")
+                b = pin_node.get(f"{item.ref}.{_pin_of(spec, ports[1])}")
+                ohms = parse_value(item.value) or parse_value(self.lib.default_value(item.symbol))
+                if a and b and ohms:
+                    elements.append(f"{_elem(item.ref, 'R')} {a} {b} {ohms:g}")
+            elif kind == "LOAD":
+                load = float(spec.get("power_load_ohm", 1e4))
+                for pin in self.lib.pins(item.symbol):
+                    if pin.get("type") not in {"power_in", "power_out"}:
+                        continue
+                    node = pin_node.get(f"{item.ref}.{pin['number']}")
+                    if node and node != "0":
+                        elements.append(f"R{item.ref}_{pin['number']} {node} 0 {load:g}")
+
+        # 每个节点都要有直流路径：只挂一个电阻的孤立节点会让 .ac 报奇异矩阵
+        for node in sorted({v for v in nodes.values() if v != "0"}):
+            elements.append(f"Rlk_{node} {node} 0 1g")
+
+        meas: list[str] = []
+        for node in sorted(rail_nodes):
+            elements.append(f"Iac_{node} {node} 0 ac 1")
+            meas.append(f".meas ac z_{node} FIND vm({node}) AT={probe:g}")
+
+        deck.rails = chars
+        deck.text = "\n".join(
+            ["* PDN 阻抗：1A 交流注入，稳压器视作开路", *elements,
+             f".ac dec 20 10 {probe * 20:g}", *meas, ".end"]
+        ) + "\n"
+        return deck
+
+    # -- I2C 总线上升时间 ------------------------------------------------ #
+    def build_bus(self, ir: DesignIR) -> SimDeck | None:
+        """按设计里的上拉电阻与总线电容做一次充放电，测 30%→70% 上升时间。"""
+        nodes, pin_node = self._pin_nodes(ir)
+        targets = [
+            n for n in ir.nets
+            if n.kind == "signal" and any(k in n.name.upper() for k in ("SDA", "SCL"))
+        ]
+        if not targets:
+            return None
+
+        trace = float(self.defaults.get("trace_cap_pf", 10.0))
+        deck = SimDeck(text="", nodes=nodes)
+        elements = ["Vdd vdd 0 dc 5"]
+        ics: list[str] = []
+        meas: list[str] = []
+        taus: list[float] = []
+
+        for net in targets:
+            node = nodes[net.name]
+            rp = 0.0
+            for member in net.members:
+                item = ir.part(member.partition(".")[0])
+                if not item or not item.symbol.endswith(":RES"):
+                    continue
+                other = self._other_net(ir, item.ref, member, net.name)
+                if other is not None and other.kind == "power":
+                    rp = parse_value(item.value) or 0.0
+                    break
+            if rp <= 0:
+                deck.notes.append(f"{net.name} 找不到接电源的上拉电阻，跳过上升时间")
+                continue
+
+            cbus_pf = trace
+            for member in net.members:
+                item = ir.part(member.partition(".")[0])
+                spec = self.map.get(item.symbol) if item else None
+                if spec and str(spec.get("kind", "")).upper() == "LOAD":
+                    cbus_pf += float(spec.get("pin_cap_pf", 0) or 0)
+
+            cb = cbus_pf * 1e-12
+            tau = rp * cb
+            taus.append(tau)
+            elements += [
+                f"Rpu_{node} vdd {node} {rp:g}",
+                f"Cb_{node} {node} 0 {cb:.6g}",
+            ]
+            ics.append(f".ic V({node})=0")
+            meas.append(
+                f".meas tran tr_{node} TRIG v({node}) VAL=1.5 RISE=1 "
+                f"TARG v({node}) VAL=3.5 RISE=1"
+            )
+            deck.rails[node] = cb
+
+        if not meas:
+            return None
+        # 一个 deck 只能有一条 .tran：多条会让后一条覆盖前一条的图，
+        # 先测的那条就会"测量失败"。取最长窗口 + 最细步长，两条总线共用。
+        step = min(max(tau / 100, 1e-9) for tau in taus)
+        stop = max(max(taus) * 12, 2e-7)
+        deck.text = "\n".join(
+            ["* I2C 总线上升时间", *elements, *ics,
+             f".tran {step:g} {stop:g} uic", *meas, ".end"]
+        ) + "\n"
+        return deck
+
+    # -- 复位 RC --------------------------------------------------------- #
+    def build_reset(self, ir: DesignIR) -> SimDeck | None:
+        """复位网络若有 R 上拉 + C 对地，测充电到 63.2% 的时间常数。"""
+        net = next((n for n in ir.nets if "RESET" in n.name.upper()), None)
+        if net is None:
+            return None
+        nodes, pin_node = self._pin_nodes(ir)
+        node = nodes[net.name]
+
+        r_val = c_val = 0.0
+        for member in net.members:
+            item = ir.part(member.partition(".")[0])
+            if not item:
+                continue
+            value = parse_value(item.value) or 0.0
+            if item.symbol.endswith(":RES"):
+                other = self._other_net(ir, item.ref, member, net.name)
+                if other is not None and other.kind == "power":
+                    r_val = value
+            elif item.symbol.endswith(":CAP"):
+                other = self._other_net(ir, item.ref, member, net.name)
+                if other is not None and other.kind == "ground":
+                    c_val = value
+
+        if r_val <= 0 or c_val <= 0:
+            return None
+
+        deck = SimDeck(text="", nodes=nodes)
+        deck.rails[node] = c_val
+        deck.text = "\n".join([
+            "* 复位 RC 时间常数",
+            "Vdd vdd 0 dc 5",
+            f"Rpu_{node} vdd {node} {r_val:g}",
+            f"C_{node} {node} 0 {c_val:.6g}",
+            f".ic V({node})=0",
+            f".tran {max(r_val * c_val / 100, 1e-7):g} {r_val * c_val * 10:g} uic",
+            f".meas tran tau WHEN v({node})=3.16 RISE=1",
+            ".end",
+        ]) + "\n"
         return deck
 
     # -- 器件 ------------------------------------------------------------ #
@@ -297,9 +482,37 @@ class SpiceBuilder:
             deck.notes.append(f"{item.ref} 的值 {item.value!r} 无法解析，用库默认 {fallback}")
         if kind == "C":
             # .op 下电容电流恒为 0，列进电流表只会误导
-            return [f"{elem} {a} {b} {value:.6g}"]
+            return self._capacitor(elem, a, b, value, deck)
         currents[item.ref] = f"@{elem.lower()}[i]"
         return [f"{elem} {a} {b} {value:.6g}"]
+
+    def _capacitor(self, elem: str, a: str, b: str, farads: float, deck: SimDeck) -> list[str]:
+        """电容串 ESR + ESL：没有这两个参数，交流阻抗恒为 0，任何阈值都永远通过。
+
+        参数取 0603 陶瓷电容的典型值（ESR 12mΩ / ESL 0.6nH），写在 defaults 里可改。
+        串接后直流工作点不变（电容隔直），只影响 .ac / .tran。
+        """
+        esr = float(self.defaults.get("cap_esr_ohm", 0) or 0)
+        esl = float(self.defaults.get("cap_esl_nh", 0) or 0)
+        if esr <= 0 and esl <= 0:
+            return [f"{elem} {a} {b} {farads:.6g}"]
+
+        nodes = [a]
+        parts = []
+        if esl > 0:
+            nodes.append(f"m{elem}_l")
+        nodes.append(f"m{elem}_r")
+        nodes.append(b)
+        parts.append(f"{elem} {nodes[0]} {nodes[1]} {farads:.6g}")
+        if esl > 0:
+            parts.append(f"L{elem}_esl {nodes[1]} {nodes[2]} {esl * 1e-9:.6g}")
+        if esr > 0:
+            parts.append(f"R{elem}_esr {nodes[-2]} {nodes[-1]} {esr:g}")
+        if "电容按" not in " ".join(deck.notes):
+            deck.notes.append(
+                f"电容按理想容值 + {esr * 1000:.0f}mΩ ESR + {esl:.1f}nH ESL 建模"
+            )
+        return parts
 
     def _load(
         self, item: BomItem, spec: dict, net_of_pin: dict[str, str], deck: SimDeck
@@ -406,6 +619,15 @@ def expected_rail(name: str, table: dict[str, float] | None = None) -> float | N
         return 0.0
     found = re.search(r"(\d+(?:\.\d+)?)\s*V", name, re.IGNORECASE)
     return float(found.group(1)) if found else None
+
+
+def pdn_probe_hz() -> float:
+    """PDN 阻抗的探测频点（默认 1 MHz），与生成 deck 时用的值保持一致。"""
+    try:
+        data = json.loads(MODELS_PATH.read_text(encoding="utf-8"))
+        return float((data.get("defaults") or {}).get("pdn_probe_hz", 1e6))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return 1e6
 
 
 def limits() -> dict[str, float]:

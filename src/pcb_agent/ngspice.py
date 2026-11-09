@@ -85,6 +85,7 @@ class RawResult:
 
     ok: bool = False
     values: dict[str, float] = field(default_factory=dict)
+    measures: dict[str, float] = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
     error: str = ""
     version: str = ""
@@ -93,6 +94,7 @@ class RawResult:
         return {
             "ok": self.ok,
             "values": self.values,
+            "measures": self.measures,
             "log": self.log[-40:],
             "error": self.error,
             "version": self.version,
@@ -173,6 +175,8 @@ class Session:
         return self.command("run")
 
     def to_file(self, path: Path, vectors: list[str]) -> int:
+        if not vectors:
+            return 0  # 只跑 .meas 的 deck 没有向量要写
         if path.exists():
             path.unlink()
         return self.command(f"wrdata {path} {' '.join(vectors)}")
@@ -184,6 +188,25 @@ class Session:
 # --------------------------------------------------------------------------- #
 # wrdata 解析
 # --------------------------------------------------------------------------- #
+# 注意：TRIG/TARG 形式的测量会把 targ=/trig= 追加在同一行，不能锚定行尾
+_MEAS_RE = re.compile(
+    r"^\s*(?:stdout|stderr)?\s*([A-Za-z_]\w*)\s*=\s*([-+]?[\d.]+(?:[eE][-+]?\d+)?)"
+)
+
+
+def parse_measures(log: list[str]) -> dict[str, float]:
+    """从日志里取 ``.meas`` 结果（ngspice 把测量值打印成 ``name = value``）。"""
+    out: dict[str, float] = {}
+    for line in log:
+        found = _MEAS_RE.match(line)
+        if found:
+            try:
+                out[found.group(1).lower()] = float(found.group(2))
+            except ValueError:
+                continue
+    return out
+
+
 def parse_wrdata(path: Path, vectors: list[str]) -> dict[str, float]:
     """``wrdata`` 每条向量输出「scale + value」两列，取奇数号列。"""
     if not path.exists():
@@ -259,6 +282,7 @@ def simulate(
             return RawResult(
                 ok=bool(data.get("ok")),
                 values={k: float(v) for k, v in (data.get("values") or {}).items()},
+                measures={k: float(v) for k, v in (data.get("measures") or {}).items()},
                 log=list(data.get("log") or []),
                 error=str(data.get("error") or ""),
                 version=str(data.get("version") or ""),
@@ -285,10 +309,11 @@ def _run_here(dll: str, deck: str, vectors: list[str], workdir: Path) -> RawResu
     out = workdir / "vectors.txt"
     session.to_file(out, vectors)
     result.values = parse_wrdata(out, vectors)
+    result.measures = parse_measures(session.log)
     result.log = session.log[-20:]
-    result.ok = bool(result.values)
+    result.ok = bool(result.values or result.measures)
     if not result.ok:
-        result.error = "未取到任何向量，检查 deck 是否包含分析语句"
+        result.error = "未取到任何结果，检查 deck 是否包含分析语句"
     session.reset()
     return result
 

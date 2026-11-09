@@ -7,7 +7,11 @@
     "leak_ohm": 1000000000.0,
     "switch_closed_ohm": 0.01,
     "switch_open_ohm": 1000000000000.0,
-    "ambient_c": 27
+    "ambient_c": 27,
+    "cap_esr_ohm": 0.012,
+    "cap_esl_nh": 0.6,
+    "trace_cap_pf": 10.0,
+    "pdn_probe_hz": 1000000.0
   },
   "sources": {
     "+5V": 5.0,
@@ -131,6 +135,10 @@
     "rail_dead_ratio": 0.5,
     "led_current_min": 0.0005,
     "led_current_max": 0.02,
-    "regulator_max_w": 0.8
+    "regulator_max_w": 0.8,
+    "i2c_rise_max": 3e-07,
+    "reset_tau_min": 0.0005,
+    "reset_tau_max": 0.005,
+    "decouple_cap_ratio_min": 0.7
   }
 }

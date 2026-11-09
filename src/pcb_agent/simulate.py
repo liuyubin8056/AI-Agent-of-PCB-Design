@@ -31,6 +31,7 @@ class SimReport:
     sources: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     unmodeled: list[str] = field(default_factory=list)
+    extras: dict = field(default_factory=dict)  # pdn / bus / reset 三条专项分析
     deck: str = ""
 
     # -- 取值 ------------------------------------------------------------ #
@@ -61,6 +62,7 @@ class SimReport:
             "sources": self.sources,
             "notes": self.notes,
             "unmodeled": self.unmodeled,
+            "extras": self.extras,
         }
 
     def write(self, path: str | Path) -> Path:
@@ -86,7 +88,11 @@ class Simulator:
         return bool(self.dll and self.builder)
 
     def run(
-        self, ir: DesignIR, out_dir: str | Path | None = None, timeout: int = 90
+        self,
+        ir: DesignIR,
+        out_dir: str | Path | None = None,
+        timeout: int = 90,
+        deep: bool = True,
     ) -> SimReport:
         if not self.available:
             return SimReport(ok=False, error="未找到 ngspice 动态库（装 KiCad 即可）")
@@ -114,9 +120,55 @@ class Simulator:
         report.error = raw.error
         if raw.log:
             report.notes.append("ngspice 日志尾部：" + " | ".join(raw.log[-2:]))
+        if report.ok and deep:
+            report.extras = self._deep(ir, target)
         if report.ok:
             report.write(target / "sim.json")
         return report
+
+    def _deep(self, ir: DesignIR, target: Path) -> dict:
+        """三条专项分析：去耦阻抗、总线上升时间、复位 RC。
+
+        任何一条都不允许拖垮主流程：失败只记录 ok=False 与原因，断言侧会跳过。
+        """
+        extras: dict = {}
+        plans = (
+            ("pdn", "build_pdn"),
+            ("bus", "build_bus"),
+            ("reset", "build_reset"),
+        )
+        for name, method in plans:
+            maker = getattr(self.builder, method, None)
+            if maker is None:
+                continue
+            deck = maker(ir)
+            if deck is None:
+                extras[name] = {
+                    "applicable": False,
+                    "ok": False,
+                    "reason": self._not_applicable(name),
+                }
+                continue
+            res = simulate(deck.text, [], target / name, self.settings)
+            extras[name] = {
+                "applicable": True,
+                "ok": res.ok,
+                "measures": res.measures,
+                "rails": deck.rails,
+                "notes": deck.notes,
+                "error": res.error,
+            }
+            if not res.ok:
+                extras[name]["log"] = res.log[-3:]
+        return extras
+
+    @staticmethod
+    def _not_applicable(name: str) -> str:
+        return {
+            "pdn": "没有可分析的电源网络",
+            "bus": "没有 I2C 总线或找不到上拉电阻",
+            "reset": "复位网络没有 R+C 组合（本板只有上拉，没有复位电容）",
+        }.get(name, "不适用")
 
 
 def summarize(report: SimReport, ir: DesignIR | None = None) -> str:
@@ -144,6 +196,42 @@ def summarize(report: SimReport, ir: DesignIR | None = None) -> str:
     width = max(len(r[0]) for r in rows)
     for name, val in rows:
         lines.append(f"  {name.ljust(width)}  {val}")
+
+    extras = report.extras or {}
+    if extras:
+        lines.append("")
+        lines.append("专项分析")
+        node_to_net = {v: k for k, v in report.nodes.items()}
+        pdn = extras.get("pdn") or {}
+        for key, ohms in (pdn.get("measures") or {}).items():
+            if not key.startswith("z_"):
+                continue
+            node = key[2:]
+            design = float((pdn.get("rails") or {}).get(node, 0) or 0)
+            cap = 1 / (6.283185307 * 1e6 * ohms) if ohms > 0 else 0
+            lines.append(
+                f"  去耦阻抗 {node_to_net.get(node, node)}：{ohms * 1000:.0f} mΩ @1MHz，"
+                f"等效 {cap * 1e9:.0f} nF / 设计 {design * 1e9:.0f} nF"
+            )
+        if pdn and not pdn.get("ok"):
+            lines.append(f"  去耦阻抗：未完成（{pdn.get('error') or pdn.get('reason')}）")
+
+        bus = extras.get("bus") or {}
+        if bus.get("measures"):
+            rises = "、".join(
+                f"{node_to_net.get(k[3:], k[3:])} {v * 1e9:.0f} ns"
+                for k, v in bus["measures"].items() if k.startswith("tr_")
+            )
+            lines.append(f"  总线上升时间：{rises}")
+        elif bus:
+            lines.append(f"  总线上升时间：不适用（{bus.get('reason') or bus.get('error')}）")
+
+        reset = extras.get("reset") or {}
+        tau = (reset.get("measures") or {}).get("tau")
+        if tau:
+            lines.append(f"  复位时间常数：{tau * 1000:.2f} ms")
+        elif reset:
+            lines.append(f"  复位时间常数：不适用（{reset.get('reason') or reset.get('error')}）")
 
     if report.unmodeled:
         lines.append("")
