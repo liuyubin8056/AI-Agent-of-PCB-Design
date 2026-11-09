@@ -74,6 +74,39 @@ BOM + 引脚级网表    ← subcircuits 用引脚语义 + 器件库确定性生
 > 没有用 CrewAI / AutoGen：角色对话式编排在「引脚级网表」这种强结构化任务上会发散、
 > 成本高、不可复现。多 Agent 的价值在「角色职责 + 工具权限 + 共享结构化状态」，不在聊天。
 
+### 两个 KiCad 后端（cli / live）
+
+```bash
+python -m pcb_agent --demo                       # 默认 cli 后端：kicad-cli 导出网表 + ERC
+python -m pcb_agent --demo --live                # live 后端：把原理图推进正在运行的 KiCad
+PCB_KICAD_BACKEND=off python -m pcb_agent --demo # 彻底关掉 KiCad 校验
+```
+
+| 后端 | 谁在干活 | 擅长 | 局限 |
+|---|---|---|---|
+| `cli` | `kicad-cli` | 批量、可复现、进 CI | 看不见 GUI |
+| `live` | KiCad IPC API（`kicad-python`） | 把产物推到人眼前、PCB 侧可编程 | **原理图没有对象模型**，ERC/网表还得靠 cli |
+| `off` | 无 | 无 KiCad 环境也能跑 | 没有网表/ERC 交叉验证 |
+
+`live` 的实测边界（KiCad 10.0.7 + kipy 0.7）：`get_version()` 正常，但
+`get_open_documents()` / `get_board()` 都返回 `no handler available` —— IPC 的处理器挂在
+编辑框上，没有打开文档时不可用；且 kipy 只暴露 `Board`（PCB），没有 Schematic。
+所以 live 只做「推送 + 状态上报」，校验仍由 cli 负责。这条已在 `docs/report-material.md`
+里连同三种打开方式的尝试一起记录，报告可直接引用。
+
+### 器件库可以导入 KiCad 官方符号
+
+手写的 10 个器件只是起步，KiCad 自带的 223 个符号库可以直接读：
+
+```bash
+python -m pcb_agent.symbol_import --libraries            # 列出 223 个库
+python -m pcb_agent.symbol_import --search ATmega328P    # 按名字搜
+python -m pcb_agent.symbol_import --import Device:R --import MCU_Microchip_ATmega:ATmega328P-P
+```
+
+导入后 id 形如 `pcbagent:Device_R`，引脚表来自官方 `.kicad_sym`（权威来源），
+可被子电路模板与渲染器直接使用。`--dry-run` 只看解析结果不落盘。
+
 ### 真机验证结果（KiCad 10.0.7，2026-10-30）
 
 不是"应该能打开"，是真跑了：

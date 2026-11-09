@@ -98,3 +98,16 @@ kicad-cli sch export pdf -o board.pdf board.kicad_sch
 - 引入 SKiDL 作为第二条独立生成路径，与 s-expression 路径做网表 diff，互为验证；
 - 自动布局从「网格摆放」升级为「按功能分区 + 力导向」；
 - 生成 `.kicad_pcb` 后接 `pcb drc` 闭环（进阶任务）。
+
+## 8. IPC API（kicad-python / kipy）实测
+
+结论一句话：**当前版本 IPC 只能替代「打开/推送」，替代不了「校验」**。
+详细证据与三种打开方式的尝试见 `docs/report-material.md` 第 3 节。
+
+- 连接与版本：`KiCad().get_version()` → `10.0.7 (10.0.7)`，`get_api_version()` → `10.0.6`
+- 文档级请求：`get_open_documents()` / `get_board()` → `ApiError: no handler available`
+- 对象模型：`kipy` 只暴露 `Board`（PCB），**没有 Schematic**，也就没有 ERC / 网表接口
+- 处理器挂在编辑框上：没有打开文档时，只有全局接口（版本等）可用
+
+所以本项目的 `PCB_KICAD_BACKEND` 保留三档：`cli`（默认，负责校验）、`live`（推送 + 状态上报）、
+`off`（无 KiCad 环境）。想用 IPC 做原理图校验，得等 KiCad 上游补齐 schematic 侧的 API。
