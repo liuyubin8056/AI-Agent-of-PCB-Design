@@ -26,7 +26,8 @@ from pcb_agent.orchestrator import Orchestrator
 
 def make_orch(tmp_path: Path) -> Orchestrator:
     settings = Settings(
-        offline=True, api_key="", model="", max_rounds=3, kicad_enabled=False
+        offline=True, api_key="", model="", max_rounds=3,
+        kicad_enabled=False, sim_enabled=False,
     )
     return Orchestrator(settings=settings, out_dir=tmp_path)
 
@@ -43,6 +44,9 @@ def test_configs_form_a_ladder():
     assert [CONFIGS[c].repair for c in "ABCD"] == ["none", "autofix", "blind", "tool"]
     assert CONFIGS["A"].use_analyst is False
     assert CONFIGS["D"].use_analyst is True
+    # E 只比 D 多一个变量，否则实验没法归因
+    assert CONFIGS["E"].sim is True and CONFIGS["D"].sim is False
+    assert CONFIGS["E"].repair == CONFIGS["D"].repair
 
 
 def test_parse_list():

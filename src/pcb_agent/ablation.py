@@ -40,6 +40,7 @@ from pathlib import Path
 from .config import Settings
 from .ir import ERROR, Issue
 from .orchestrator import Orchestrator
+from .simcheck import check as check_sim
 from .validate import counts, run_all
 from .patch import apply
 
@@ -110,6 +111,7 @@ class Config:
     name: str
     use_analyst: bool  # 需求分析是否调 LLM（False = 规则兜底，即"单 Agent"）
     repair: str  # none / autofix / blind / tool，返修阶梯
+    sim: bool = False  # 仿真结论是否进返修闭环（E 组唯一变量）
     max_rounds: int = 3
 
 
@@ -119,10 +121,13 @@ CONFIGS: dict[str, Config] = {
     "B": Config("B", "单 Agent + 规则校验器", use_analyst=False, repair="autofix"),
     "C": Config("C", "多 Agent（评审无工具）", use_analyst=True, repair="blind"),
     "D": Config("D", "多 Agent（评审带工具）", use_analyst=True, repair="tool"),
+    # E 只比 D 多一个变量：把仿真实测值也当证据交给评审。
+    # 结构校验抓不到的「值错误」只有它能修，这是 D 组之前没有优势的原因。
+    "E": Config("E", "多 Agent + 仿真闸门", use_analyst=True, repair="tool", sim=True),
 }
 
 HALLUCINATION_CODES = {"PIN_NOT_EXIST", "NET_DANGLING_REF", "PIN_MULTIPLE_NETS"}
-FAULTS = ("decoupling", "i2c", "reset")
+FAULTS = ("decoupling", "i2c", "reset", "value")
 
 
 # --------------------------------------------------------------------------- #
@@ -148,6 +153,8 @@ class CaseResult:
     hallucinated: int = 0
     error_codes: list[str] = field(default_factory=list)
     fault: str = ""
+    sim_errors: int = 0
+    sim_codes: list[str] = field(default_factory=list)
     note: str = ""
 
     @property
@@ -185,9 +192,16 @@ def _inject_first_applicable(
         new_ir, log = orch.inject_fault(ir, kind)
         if new_ir is ir:
             continue
-        # 故障必须真的能被校验器抓到，否则这个用例没有区分度
+        # 故障必须真的能被「某一种」检查抓到，否则这个用例没有区分度。
+        # 值错误不会被结构校验发现，只能靠仿真，所以两条判据都要看。
         if counts(run_all(new_ir, orch.lib))[0] > base_errors:
             return new_ir, kind, log
+        if orch.sim.available:
+            report = orch.sim.run(new_ir, Path("runs") / "_probe")
+            if report.ok and any(
+                i.severity == ERROR for i in check_sim(new_ir, report, orch.lib)
+            ):
+                return new_ir, kind, log
     return ir, "", ["没有可检测到的故障可注入"]
 
 
@@ -197,6 +211,7 @@ def run_case(
     target = out_dir / case.id / cfg.code
     target.mkdir(parents=True, exist_ok=True)
     orch._bind_tracer(target)
+    orch.settings.sim_enabled = cfg.sim
     for key in orch.llm.usage:
         orch.llm.usage[key] = 0
 
@@ -250,6 +265,14 @@ def run_case(
         rounds += 1
         issues, _artifacts = orch._evaluate(ir, rounds, target)
 
+    # 无论这组是否把仿真接进闭环，都用同一把尺子量一次，保证可比
+    if orch.sim.available:
+        report = orch.sim.run(ir, target / "sim")
+        if report.ok:
+            sim_issues = check_sim(ir, report, orch.lib)
+            result.sim_errors = sum(1 for i in sim_issues if i.severity == ERROR)
+            result.sim_codes = sorted({i.code for i in sim_issues if i.severity == ERROR})
+
     # 落盘最终产物，方便事后翻单个用例
     orch._write_final(ir, target, {})
 
@@ -295,6 +318,7 @@ def aggregate(results: list[CaseResult]) -> dict[str, dict]:
             "selection_acc": round(sum(1 for r in rows if r.selection_ok) / n, 3),
             "hallucinated_total": sum(r.hallucinated for r in rows),
             "avg_parts": round(sum(r.parts for r in rows) / n, 1),
+            "avg_sim_errors": round(sum(r.sim_errors for r in rows) / n, 2),
         }
     return summary
 
@@ -308,13 +332,13 @@ def to_markdown(results: list[CaseResult], summary: dict[str, dict]) -> str:
         "",
         "## 汇总",
         "",
-        "| 配置 | 说明 | 零错误率 | 平均错误 | 平均轮次 | 平均调用 | 平均 tokens | 平均耗时(s) | 选型准确率 | 引脚幻觉 |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| 配置 | 说明 | 零错误率 | 平均错误 | 平均仿真错误 | 平均轮次 | 平均调用 | 平均 tokens | 平均耗时(s) | 选型准确率 | 引脚幻觉 |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for code, s in summary.items():
         lines.append(
             f"| {code} | {s['name']} | {s['zero_error_rate']:.0%} | {s['avg_errors']} | "
-            f"{s['avg_rounds']} | {s['avg_calls']} | {s['avg_tokens']} | "
+            f"{s['avg_sim_errors']} | {s['avg_rounds']} | {s['avg_calls']} | {s['avg_tokens']} | "
             f"{s['avg_elapsed_s']} | {s['selection_acc']:.0%} | {s['hallucinated_total']} |"
         )
 
@@ -322,12 +346,13 @@ def to_markdown(results: list[CaseResult], summary: dict[str, dict]) -> str:
         "",
         "## 明细",
         "",
-        "| 用例 | 配置 | 故障 | 器件 | 网络 | 错误 | 轮次 | 调用 | tokens | 耗时(s) | 选型 | 错误码 |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| 用例 | 配置 | 故障 | 器件 | 网络 | 错误 | 仿真错误 | 轮次 | 调用 | tokens | 耗时(s) | 选型 | 错误码 |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in results:
         lines.append(
-            f"| {r.case_id} | {r.config} | {r.fault or '—'} | {r.parts} | {r.nets} | {r.errors} | {r.rounds} | "
+            f"| {r.case_id} | {r.config} | {r.fault or '—'} | {r.parts} | {r.nets} | {r.errors} | "
+            f"{r.sim_errors} | {r.rounds} | "
             f"{r.calls} | {r.tokens} | {r.elapsed_s} | "
             f"{'✓' if r.selection_ok else '✗'} | {', '.join(r.error_codes) or '—'} |"
         )
@@ -398,7 +423,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--fault",
         default="rotate",
-        choices=["rotate", "none", "decoupling", "i2c", "reset"],
+        choices=["rotate", "none", "decoupling", "i2c", "reset", "value"],
         help="故障注入方式，默认 rotate（按用例轮换）",
     )
     return parser

@@ -11,10 +11,11 @@ from pcb_agent.orchestrator import Orchestrator
 
 
 def make_orch(tmp_path: Path) -> Orchestrator:
-    # 强制离线 + 关闭 kicad-cli，保证 CI / 无网络 / 无密钥环境都能跑，
-    # 也避免每次都起 kicad-cli 进程拖慢测试（KiCad 集成见 test_kicad.py）
+    # 强制离线 + 关闭 kicad-cli / 仿真，保证 CI / 无网络 / 无密钥环境都能跑，
+    # 也避免每个用例起子进程拖慢测试（集成测试见 test_kicad.py / test_simcheck.py）
     settings = Settings(
-        offline=True, api_key="", model="", max_rounds=3, kicad_enabled=False
+        offline=True, api_key="", model="", max_rounds=3,
+        kicad_enabled=False, sim_enabled=False,
     )
     return Orchestrator(settings=settings, out_dir=tmp_path)
 
