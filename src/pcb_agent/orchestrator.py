@@ -21,6 +21,9 @@ from .config import Settings
 from .ir import ERROR, BoardSpec, DesignIR, Issue
 from .kicad_gate import KiCadGate, diff_with_ir
 from .kicad_live import KiCadLive
+from .pcb import build_board as build_pcb_board
+from .pcb import write_pcb
+from .router import route_board
 from .library import Library
 from .llm import LLMClient, LLMError
 from .patch import PatchOp, apply, ops_from_text
@@ -353,6 +356,34 @@ class Orchestrator:
         for key, path in artifacts.items():
             out.setdefault(key, path)
         return out
+
+    def export_pcb(
+        self, ir: DesignIR, out_dir: str | Path, route: bool = True
+    ) -> dict[str, str]:
+        """生成 .kicad_pcb，可选自动布线与 DRC，返回产物与指标。"""
+        target = Path(out_dir)
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            board = build_pcb_board(ir)
+        except (RuntimeError, FileNotFoundError) as exc:
+            return {"错误": f"无法生成 PCB：{exc}"}
+
+        info: dict[str, str] = {}
+        if route:
+            stats = route_board(board)
+            info["布通率"] = stats.describe()
+        path = write_pcb(board, target / "board.kicad_pcb")
+        info["PCB"] = str(path)
+        info["板尺寸"] = f"{board.width:.1f} x {board.height:.1f} mm"
+
+        if self.gate.available:
+            res = self.gate.run_drc(path, target / "pcb_drc.json")
+            errors = sum(1 for i in res.issues if i.severity == "error")
+            warnings = len(res.issues) - errors
+            info["PCB DRC"] = f"{errors} 个错误 / {warnings} 个警告"
+            if res.artifacts.get("report"):
+                info["DRC 报告"] = res.artifacts["report"]
+        return info
 
     def _publish_live(self, paths: dict[str, str], log: list[str]) -> None:
         """live 后端：把最终原理图推进正在运行的 KiCad，并把 IPC 状态记进日志。

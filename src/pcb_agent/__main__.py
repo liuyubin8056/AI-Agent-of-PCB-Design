@@ -53,6 +53,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json", action="store_true", help="以 JSON 形式输出摘要")
     parser.add_argument("--quiet", action="store_true", help="只输出摘要，不打印问题清单")
     parser.add_argument(
+        "--pcb",
+        action="store_true",
+        help="顺带生成 .kicad_pcb 并自动布线（含 DRC）",
+    )
+    parser.add_argument(
         "--live",
         action="store_true",
         help="用 KiCad IPC 后端：把原理图推进正在运行的 KiCad（需开启 IPC API）",
@@ -92,6 +97,14 @@ def main(argv: list[str] | None = None) -> int:
                 result.ir, args.revise, out_dir / "revision"
             )
 
+    pcb_info: dict[str, str] = {}
+    if args.pcb:
+        print()
+        print("生成 PCB 并自动布线…")
+        pcb_info = orch.export_pcb(result.ir, out_dir)
+        for key, value in pcb_info.items():
+            print(f"  {key}：{value}")
+
     if args.json:
         payload = {
             "title": result.spec.title,
@@ -101,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
             "errors": result.errors,
             "warnings": result.warnings,
             "artifacts": {k: str(v) for k, v in result.artifacts.items()},
+            "pcb": pcb_info,
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
