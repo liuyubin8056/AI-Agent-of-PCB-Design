@@ -52,17 +52,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="以 JSON 形式输出摘要")
     parser.add_argument("--quiet", action="store_true", help="只输出摘要，不打印问题清单")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="用 KiCad IPC 后端：把原理图推进正在运行的 KiCad（需开启 IPC API）",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     settings = Settings.load()
+    if args.live:
+        settings.kicad_backend = "live"
     out_dir = Path(args.out) if args.out else _default_out()
 
     orch = Orchestrator(settings=settings, out_dir=out_dir)
     print(f"LLM 后端：{settings.describe()}")
     print(f"kicad-cli：{'可用' if orch.gate.available else '未安装（跳过网表/ERC 校验）'}")
+    print(f"KiCad 后端：{settings.kicad_backend}")
+    if settings.kicad_backend == "live":
+        print(f"  {orch.live.status().describe()}")
     print(f"输出目录：{out_dir.resolve()}")
 
     if args.from_json:

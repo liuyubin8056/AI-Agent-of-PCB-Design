@@ -41,6 +41,7 @@ class Settings:
     max_rounds: int = 3
     kicad_cli: str = ""
     kicad_enabled: bool = True
+    kicad_backend: str = "cli"  # cli / live / off
     temperature: float = 0.0  # 默认 0：实验要可复现，不要采样抖动
     timeout: int = 120
 
@@ -60,6 +61,7 @@ class Settings:
             max_rounds=int(os.environ.get("PCB_MAX_ROUNDS", "3") or "3"),
             kicad_cli=os.environ.get("KICAD_CLI", "").strip(),
             kicad_enabled=_as_bool(os.environ.get("PCB_KICAD"), default=True),
+            kicad_backend=(os.environ.get("PCB_KICAD_BACKEND", "cli").strip().lower() or "cli"),
             temperature=float(os.environ.get("PCB_LLM_TEMPERATURE", "0") or "0"),
             timeout=int(os.environ.get("PCB_LLM_TIMEOUT", "120") or "120"),
         )

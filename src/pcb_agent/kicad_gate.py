@@ -108,7 +108,7 @@ class KiCadGate:
         self.cli = self._locate()
 
     def _locate(self) -> str | None:
-        if not self.settings.kicad_enabled:
+        if not self.settings.kicad_enabled or self.settings.kicad_backend == "off":
             return None
         if self.settings.kicad_cli:
             path = Path(self.settings.kicad_cli)

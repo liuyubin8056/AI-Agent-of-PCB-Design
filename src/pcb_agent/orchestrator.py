@@ -20,6 +20,7 @@ from .agents import AnalystAgent, CriticAgent, DesignerAgent
 from .config import Settings
 from .ir import ERROR, BoardSpec, DesignIR, Issue
 from .kicad_gate import KiCadGate, diff_with_ir
+from .kicad_live import KiCadLive
 from .library import Library
 from .llm import LLMClient, LLMError
 from .patch import PatchOp, apply, ops_from_text
@@ -86,6 +87,7 @@ class Orchestrator:
         self.lib = lib or Library()
         self.llm = LLMClient(self.settings)
         self.gate = KiCadGate(self.settings)
+        self.live = KiCadLive(self.settings)
         self.tracer: Tracer | None = None
         self.analyst = AnalystAgent(llm=self.llm, lib=self.lib)
         self.designer = DesignerAgent(llm=self.llm, lib=self.lib)
@@ -127,6 +129,7 @@ class Orchestrator:
         ir, issues, artifacts, rounds = self._repair(ir, target, log, start_round=1)
 
         final = self._write_final(ir, target, artifacts)
+        self._publish_live(final, log)
         elapsed = round(time.perf_counter() - t0, 2)
 
         result = RunResult(
@@ -214,6 +217,7 @@ class Orchestrator:
             new_ir, target, patch_log, start_round=1
         )
         final = self._write_final(new_ir, target, artifacts)
+        self._publish_live(final, patch_log)
         result = RunResult(
             request=request,
             spec=new_ir.spec,
@@ -350,6 +354,22 @@ class Orchestrator:
             out.setdefault(key, path)
         return out
 
+    def _publish_live(self, paths: dict[str, str], log: list[str]) -> None:
+        """live 后端：把最终原理图推进正在运行的 KiCad，并把 IPC 状态记进日志。
+
+        原理图在 KiCad 10 + kipy 0.7 下没有对象模型，所以这里只做"推给 GUI"，
+        校验仍由 kicad-cli 负责。失败也只是记一行日志，不影响交付物。
+        """
+        if self.settings.kicad_backend != "live":
+            return
+        sch = paths.get("原理图")
+        if not sch:
+            return
+        ok, message = self.live.open_in_editor(sch)
+        log.append(f"kicad_live：{message}")
+        if self.tracer:
+            self.tracer.event("live_publish", ok=ok, message=message)
+
     def _record(self, result: RunResult, elapsed: float, out_dir: Path) -> None:
         summary = {
             "request": result.request,
@@ -362,6 +382,10 @@ class Orchestrator:
             "nets": len(result.ir.nets),
             "elapsed_s": elapsed,
             "kicad_cli": self.gate.available,
+            "kicad_backend": self.settings.kicad_backend,
+            "live_status": self.live.status().describe()
+            if self.settings.kicad_backend == "live"
+            else "",
             "llm_usage": dict(self.llm.usage),
             "issues": [i.to_dict() for i in result.issues],
             "log": result.log,
