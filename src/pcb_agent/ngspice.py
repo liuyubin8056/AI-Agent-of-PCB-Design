@@ -23,6 +23,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -151,13 +152,14 @@ class Session:
         return int(self.lib.ngSpice_Command(text.encode("utf-8")))
 
     def version(self) -> str:
+        """只要 ``ngspice-46`` 这一个短串：完整 banner 有几十行，日志里没法看。"""
         self.log.clear()
         self.command("version")
-        text = " ".join(self.log)
-        for line in text.splitlines():
-            if "ngspice-" in line:
-                return line.strip().strip("* ").strip()
-        return text.strip()[:80]
+        for line in self.log:
+            found = re.search(r"ngspice-\d+", line)
+            if found:
+                return found.group(0)
+        return "ngspice"
 
     def load(self, lines: list[str]) -> int:
         """装电路。数组必须以 NULL 结尾，否则 ngspice 越界读。"""
