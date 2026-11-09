@@ -24,6 +24,9 @@ from .kicad_live import KiCadLive
 from .pcb import build_board as build_pcb_board
 from .pcb import write_pcb
 from .router import route_board
+from .simcheck import check as check_sim
+from .spice import format_value, parse_value
+from .simulate import SimReport, Simulator
 from .library import Library
 from .llm import LLMClient, LLMError
 from .patch import PatchOp, apply, ops_from_text
@@ -91,6 +94,8 @@ class Orchestrator:
         self.llm = LLMClient(self.settings)
         self.gate = KiCadGate(self.settings)
         self.live = KiCadLive(self.settings)
+        self.sim = Simulator(self.settings, self.lib)
+        self.last_sim: SimReport | None = None
         self.tracer: Tracer | None = None
         self.analyst = AnalystAgent(llm=self.llm, lib=self.lib)
         self.designer = DesignerAgent(llm=self.llm, lib=self.lib)
@@ -258,6 +263,21 @@ class Orchestrator:
         return self.llm.available
 
     # ------------------------------------------------------------------ #
+    def _led_resistor(self, ir: DesignIR) -> str:
+        """找 LED 限流电阻：值错误故障要挑一个仿真判得出来的器件。"""
+        for item in ir.bom:
+            if self.lib.category(item.symbol) != "indicator":
+                continue
+            for net in ir.nets:
+                if f"{item.ref}.2" not in net.members:
+                    continue
+                for member in net.members:
+                    ref = member.split(".")[0]
+                    other = ir.part(ref)
+                    if other and ref.startswith("R"):
+                        return ref
+        return ""
+
     def inject_fault(self, ir: DesignIR, kind: str) -> tuple[DesignIR, list[str]]:
         """故意破坏一个器件，用来演示「校验 - 评审 - 返修」闭环真的在起作用。
 
@@ -288,6 +308,27 @@ class Orchestrator:
                             break
                     if target:
                         break
+        elif kind in {"value", "spec"}:
+            # 值错误：连接完全正确，只有电阻值离谱。ERC / DRC / 规则校验全绿，
+            # 只有仿真能抓——这是证明「仿真闸门」有存在价值的对照组。
+            target = self._led_resistor(ir) or next(
+                (
+                    i.ref
+                    for i in ir.bom
+                    if i.symbol.endswith(":RES") and i.ref.startswith("R")
+                ),
+                "",
+            )
+            item = ir.part(target) if target else None
+            ohms = parse_value(item.value) if item else None
+            if item and ohms:
+                new_ir, log = apply(
+                    ir,
+                    [PatchOp("set_value", ref=target, value=format_value(ohms / 20))],
+                    self.lib,
+                )
+                return new_ir, [f"注入故障：{target} 改小 20 倍（值错误，连接不变）"] + log
+            return ir, ["未找到可改值的电阻"]
         elif kind == "reset":
             for net in ir.nets:
                 if "RESET" in net.name.upper():
@@ -335,6 +376,20 @@ class Orchestrator:
                 issues.extend(erc.issues)
                 if erc.artifacts.get("report"):
                     artifacts["ERC 报告"] = erc.artifacts["report"]
+
+        # 电气行为断言：结构校验抓不到的「值错误」只有仿真能抓
+        if self.settings.sim_enabled and self.sim.available:
+            report = self.sim.run(ir, rdir)
+            self.last_sim = report
+            if report.ok:
+                artifacts["仿真结果"] = str(rdir / "sim.json")
+            issues.extend(check_sim(ir, report, self.lib))
+            if self.tracer:
+                self.tracer.event(
+                    "sim", round=round_no, ok=report.ok,
+                    version=report.version, elapsed=report.elapsed,
+                    unmodeled=len(report.unmodeled),
+                )
 
         errors, warnings = counts(issues)
         if self.tracer:

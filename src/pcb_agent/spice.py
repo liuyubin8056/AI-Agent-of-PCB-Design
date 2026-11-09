@@ -52,6 +52,17 @@ def parse_value(text: str) -> float | None:
         return None
 
 
+def format_value(value: float, unit: str = "") -> str:
+    """把 4700 写成 ``4.7k``，补丁回灌给人看时才像话。"""
+    for scale, suffix in (
+        (1e6, "M"), (1e3, "k"), (1.0, ""), (1e-3, "m"),
+        (1e-6, "u"), (1e-9, "n"), (1e-12, "p"),
+    ):
+        if abs(value) >= scale:
+            return f"{value / scale:g}{suffix}{unit}"
+    return f"{value:g}{unit}"
+
+
 def is_ground(name: str) -> bool:
     upper = name.strip().upper()
     return upper in GROUND_NAMES or upper.startswith("GND")
@@ -84,6 +95,7 @@ class SimDeck:
     nodes: dict[str, str] = field(default_factory=dict)  # 网名 -> 节点
     vectors: list[str] = field(default_factory=list)
     currents: dict[str, str] = field(default_factory=dict)  # 位号 -> 电流向量
+    sources: dict[str, str] = field(default_factory=dict)  # 电源网名 -> 理想源元件名
     unmodeled: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -177,6 +189,7 @@ class SpiceBuilder:
 
         vectors = [f"v({n})" for n in nodes.values() if n != "0"]
         vectors += list(currents.values())
+        vectors += [f"i({elem})" for elem in deck.sources.values()]
         deck.vectors = vectors
         deck.currents = currents
 
@@ -324,7 +337,9 @@ class SpiceBuilder:
             if note:
                 deck.notes.append(note)
             node = deck.nodes[net.name]
-            out.append(f"V{node} {node} 0 dc {value:g}")
+            elem = f"V{node}"
+            deck.sources[net.name] = elem
+            out.append(f"{elem} {node} 0 dc {value:g}")
         return out
 
     def _drives(self, ir: DesignIR, net_of_pin: dict[str, str], nodes: dict[str, str]) -> list[str]:
@@ -370,6 +385,35 @@ class SpiceBuilder:
                 continue
             out.append(f"Rlk_{nodes[net.name]} {nodes[net.name]} 0 {ohms:g}")
         return out
+
+
+def rail_expectations() -> dict[str, float]:
+    """电源网名 -> 期望电压。数据来自 spice_models.json 的 sources。"""
+    try:
+        data = json.loads(MODELS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {str(k): float(v) for k, v in (data.get("sources") or {}).items()}
+
+
+def expected_rail(name: str, table: dict[str, float] | None = None) -> float | None:
+    """先查表，再按网名里的数字推断（如 +12V -> 12）。"""
+    table = rail_expectations() if table is None else table
+    if name in table:
+        return table[name]
+    upper = name.upper()
+    if upper in GROUND_NAMES or upper.startswith("GND"):
+        return 0.0
+    found = re.search(r"(\d+(?:\.\d+)?)\s*V", name, re.IGNORECASE)
+    return float(found.group(1)) if found else None
+
+
+def limits() -> dict[str, float]:
+    try:
+        data = json.loads(MODELS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {str(k): float(v) for k, v in (data.get("limits") or {}).items()}
 
 
 def _pin_of(spec: dict, port: str) -> str:

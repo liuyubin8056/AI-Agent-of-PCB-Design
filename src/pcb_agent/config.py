@@ -43,6 +43,7 @@ class Settings:
     kicad_enabled: bool = True
     kicad_backend: str = "cli"  # cli / live / off
     ngspice_dll: str = ""  # 留空则自动从 KiCad 安装目录找 ngspice.dll
+    sim_enabled: bool = True  # PCB_SIM=off 可关，测试与 CI 提速
     temperature: float = 0.0  # 默认 0：实验要可复现，不要采样抖动
     timeout: int = 120
 
@@ -64,6 +65,7 @@ class Settings:
             kicad_enabled=_as_bool(os.environ.get("PCB_KICAD"), default=True),
             kicad_backend=(os.environ.get("PCB_KICAD_BACKEND", "cli").strip().lower() or "cli"),
             ngspice_dll=os.environ.get("NGSPICE_DLL", "").strip(),
+            sim_enabled=_as_bool(os.environ.get("PCB_SIM"), default=True),
             temperature=float(os.environ.get("PCB_LLM_TEMPERATURE", "0") or "0"),
             timeout=int(os.environ.get("PCB_LLM_TIMEOUT", "120") or "120"),
         )

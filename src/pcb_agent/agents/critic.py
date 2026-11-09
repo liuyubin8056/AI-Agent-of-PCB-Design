@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .. import prompts
 from ..ir import ERROR, DesignIR, Issue
 from ..llm import LLMError
@@ -16,6 +18,12 @@ from ..patch import OPS, PatchOp
 from .base import Agent
 
 MAX_PATCHES = 6
+
+
+def _measured_current(message: str) -> float | None:
+    """从断言文案里取回实测电流（A）。文案格式由 simcheck 保证，有单测锁定。"""
+    found = re.search(r"电流\s*([\d.]+)\s*mA", message or "")
+    return float(found.group(1)) / 1000 if found else None
 
 
 class CriticAgent(Agent):
@@ -117,8 +125,26 @@ class CriticAgent(Agent):
             ops.append(op)
         return ops
 
+    def _led_resistor(self, ir: DesignIR, led_ref: str) -> str:
+        """找 LED 阳极那条网上的限流电阻。"""
+        for net in ir.nets:
+            if f"{led_ref}.2" not in net.members:
+                continue
+            for member in net.members:
+                ref = member.split(".")[0]
+                item = ir.part(ref)
+                if item and ref.startswith("R"):
+                    return ref
+        return ""
+
     def _autofix(self, ir: DesignIR, issues: list[Issue]) -> list[PatchOp]:
-        """规则自动修复：只处理「补一颗器件就能好」的问题。"""
+        """规则自动修复：只处理「补一颗器件」或「改一个值」就能好的问题。
+
+        仿真结论也在这里兜底：LED 电流超标就调大限流电阻。没有这条，
+        E 组（多 Agent + 仿真闸门）即使发现了问题也改不动，闭环断在半路。
+        """
+        from ..spice import format_value, parse_value
+
         used = set(ir.refs())
         counter: dict[str, int] = {}
 
@@ -140,6 +166,21 @@ class CriticAgent(Agent):
             if len(ops) >= MAX_PATCHES:
                 break
             net = issue.where
+            if issue.code in {"SIM_LED_OVERDRIVE", "SIM_LED_OFF"} and issue.where:
+                ref = self._led_resistor(ir, issue.where)
+                item = ir.part(ref) if ref else None
+                ohms = parse_value(item.value) if item else None
+                if item and ohms:
+                    # 按实测电流反推目标阻值：I ∝ 1/R，直接一步到位，
+                    # 别用"乘 10 试试"这种拍脑袋的做法（会停在 165Ω / 15mA 这种尴尬值）
+                    amps = _measured_current(issue.message)
+                    if amps:
+                        target_i = 0.005  # 指示灯工作点取 5mA
+                        ohms = min(max(ohms * amps / target_i, 100.0), 100_000.0)
+                    else:
+                        ohms *= 10 if issue.code == "SIM_LED_OVERDRIVE" else 0.1
+                    ops.append(PatchOp("set_value", ref=ref, value=format_value(ohms)))
+                    continue
             if issue.code == "POWER_RAIL_NO_DECOUPLING" and net:
                 c = nxt("C")
                 ops += [

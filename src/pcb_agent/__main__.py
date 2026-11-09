@@ -47,11 +47,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--inject-fault",
         default="",
-        choices=["", "decoupling", "i2c", "reset"],
-        help="演示用：故意删掉一个器件，观察校验-评审-返修闭环",
+        choices=["", "decoupling", "i2c", "reset", "value"],
+        help="演示用：故意破坏设计（value=只改值不改连接，只有仿真能抓）",
     )
     parser.add_argument("--json", action="store_true", help="以 JSON 形式输出摘要")
     parser.add_argument("--quiet", action="store_true", help="只输出摘要，不打印问题清单")
+    parser.add_argument(
+        "--sim",
+        action="store_true",
+        help="打印工作点仿真明细（仿真本身默认开启，PCB_SIM=off 可关）",
+    )
     parser.add_argument(
         "--pcb",
         action="store_true",
@@ -97,6 +102,13 @@ def main(argv: list[str] | None = None) -> int:
                 result.ir, args.revise, out_dir / "revision"
             )
 
+    if args.sim and orch.last_sim is not None:
+        from .simulate import summarize
+
+        print()
+        print("工作点仿真")
+        print(summarize(orch.last_sim))
+
     pcb_info: dict[str, str] = {}
     if args.pcb:
         print()
@@ -115,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             "warnings": result.warnings,
             "artifacts": {k: str(v) for k, v in result.artifacts.items()},
             "pcb": pcb_info,
+            "sim": orch.last_sim.to_dict() if orch.last_sim else {},
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
