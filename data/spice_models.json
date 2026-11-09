@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "note": "器件 -> SPICE 模型映射。kind 决定生成哪类元件：R/C/D 两端元件、X 子电路、SW 开关、LOAD 等效负载、SKIP 不建模。pins 的键是引脚号，值是端口名。",
+  "defaults": {
+    "drive_voltage": 5.0,
+    "drive_series_ohm": 22,
+    "leak_ohm": 1000000000.0,
+    "switch_closed_ohm": 0.01,
+    "switch_open_ohm": 1000000000000.0,
+    "ambient_c": 27
+  },
+  "sources": {
+    "+5V": 5.0,
+    "+3V3": 3.3,
+    "+3.3V": 3.3,
+    "+12V": 12.0,
+    "VIN_RAW": 12.0,
+    "VBUS": 5.0,
+    "VCC": 5.0,
+    "VDD": 3.3
+  },
+  "models": {
+    "pcbagent:RES": {
+      "kind": "R",
+      "pins": {
+        "1": "a",
+        "2": "b"
+      }
+    },
+    "pcbagent:CAP": {
+      "kind": "C",
+      "pins": {
+        "1": "a",
+        "2": "b"
+      }
+    },
+    "pcbagent:LED": {
+      "kind": "D",
+      "pins": {
+        "2": "a",
+        "1": "k"
+      },
+      "model": "DLED"
+    },
+    "pcbagent:XTAL": {
+      "kind": "X",
+      "pins": {
+        "1": "a",
+        "2": "b"
+      },
+      "ports": [
+        "a",
+        "b"
+      ],
+      "subckt": "XTAL_16M"
+    },
+    "pcbagent:LDO_AMS1117_5V": {
+      "kind": "X",
+      "pins": {
+        "3": "vin",
+        "1": "gnd",
+        "2": "vout"
+      },
+      "ports": [
+        "vin",
+        "gnd",
+        "vout"
+      ],
+      "subckt": "LDO_5V"
+    },
+    "pcbagent:SW_PUSH": {
+      "kind": "SW",
+      "pins": {
+        "1": "a",
+        "2": "b"
+      }
+    },
+    "pcbagent:MCU_ATmega328P": {
+      "kind": "LOAD",
+      "pins": {},
+      "power_load_ohm": 2000.0,
+      "pin_cap_pf": 5.0
+    },
+    "pcbagent:SENSOR_I2C": {
+      "kind": "LOAD",
+      "pins": {},
+      "power_load_ohm": 10000.0,
+      "pin_cap_pf": 10.0
+    },
+    "pcbagent:CONN_2": {
+      "kind": "SKIP"
+    },
+    "pcbagent:PWR_FLAG": {
+      "kind": "SKIP"
+    }
+  },
+  "subckts": {
+    "LDO_5V": {
+      "ports": [
+        "vin",
+        "gnd",
+        "vout"
+      ],
+      "lines": [
+        "* AMS1117-5.0 行为级模型：1.1V 压差 + 5mA 静态电流 + 输入电流随负载",
+        "Vos VREG VOUT 0",
+        "Breg VREG GND V = min(5, V(VIN)-1.1)",
+        "Bin VIN GND I = I(Vos) + 5m",
+        "Iq VOUT GND 5m"
+      ]
+    },
+    "XTAL_16M": {
+      "ports": [
+        "a",
+        "b"
+      ],
+      "lines": [
+        "* 16MHz HC49 等效：Lm/Cm/Rm 串联支路 + 并联 C0",
+        "Lm a m 4.9m",
+        "Cm m b 0.02p",
+        "Rm m b 30",
+        "C0 a b 5p"
+      ]
+    }
+  },
+  "device_models": {
+    "DLED": "D(Is=1e-20 N=1.9 Rs=8)"
+  }
+}
