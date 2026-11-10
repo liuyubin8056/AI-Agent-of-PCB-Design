@@ -199,8 +199,13 @@ class Orchestrator:
         log: list[str] = []
         if inject_fault:
             self._step("inject", "begin", input={"类型": inject_fault})
+            started = time.perf_counter()
             ir, fault_log = self.inject_fault(ir, inject_fault)
-            self._step("inject", "end", warn=True, output={"日志": fault_log[:2]})
+            self._step(
+                "inject", "end", warn=True,
+                elapsed=round(time.perf_counter() - started, 3),
+                output={"日志": fault_log[:2]},
+            )
             log.extend(fault_log)
             if self.tracer:
                 self.tracer.event("inject_fault", fault=inject_fault, log=fault_log)
@@ -208,9 +213,11 @@ class Orchestrator:
         ir, issues, artifacts, rounds = self._repair(ir, target, log, start_round=1)
 
         self._step("finalize", "begin")
+        started = time.perf_counter()
         final = self._write_final(ir, target, artifacts)
         self._step(
             "finalize", "end",
+            elapsed=round(time.perf_counter() - started, 3),
             output={"产物": len(final), "原理图": Path(final.get("原理图", "")).name},
         )
         self._publish_live(final, log)

@@ -59,6 +59,8 @@ class Step:
     def duration_text(self) -> str:
         if self.elapsed is None:
             return "…"
+        if self.elapsed < 0.001:
+            return "<1ms"
         if self.elapsed < 1:
             return f"{self.elapsed * 1000:.0f}ms"
         return f"{self.elapsed:.2f}s"
@@ -163,7 +165,9 @@ class StepRecorder:
 
         step.outputs.update(record.get("output") or {})
         step.notes.extend(str(x) for x in (record.get("notes") or []))
-        step.elapsed = float(record.get("elapsed") or 0.0) or None
+        # 显式的 0.0 是"很快"，不是"没测到"；只有字段缺失才是 None
+        raw_elapsed = record.get("elapsed")
+        step.elapsed = float(raw_elapsed) if raw_elapsed is not None else None
         if status == "skip":
             step.status = "skip"
         elif record.get("ok") is False:

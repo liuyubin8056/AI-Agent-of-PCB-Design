@@ -136,3 +136,17 @@ def test_snapshot_writes_file(tmp_path):
 def test_supported_is_false_without_tty():
     # pytest 环境下 stdout 被捕获，不是 TTY
     assert tui.supported() is False
+
+
+def test_zero_elapsed_is_not_missing():
+    """很快的步骤（如应用补丁 <1ms）不能显示成"…"（那是"没测到"的意思）。"""
+    rec = StepRecorder()
+    rec.consume(begin("patch"))
+    rec.consume(end("patch", elapsed=0.0, output={"应用": 1}))
+    assert rec.steps[0].elapsed == 0.0
+    assert rec.steps[0].duration_text() == "<1ms"
+
+    rec.consume(begin("finalize"))
+    rec.consume(end("finalize", output={"产物": 6}))
+    assert rec.steps[1].elapsed is None
+    assert rec.steps[1].duration_text() == "…"
