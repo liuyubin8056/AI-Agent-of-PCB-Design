@@ -103,8 +103,11 @@ def main(argv: list[str] | None = None) -> int:
 
     orch = Orchestrator(settings=settings, out_dir=out_dir)
 
+    from .console import ensure_utf8
     from .ui.tui import Tui
     from .ui.tui import supported as tui_supported
+
+    ensure_utf8()
 
     use_tui = False
     if args.tui == "on":

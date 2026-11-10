@@ -21,6 +21,7 @@ import time
 import unicodedata
 from typing import Any
 
+from ..console import ensure_utf8
 from ..steps import Step, StepRecorder
 
 RESET = "\x1b[0m"
@@ -321,6 +322,8 @@ class Tui:
     # -- 生命周期 -------------------------------------------------------- #
     def start(self) -> None:
         self.rec.started_at = time.perf_counter()
+        # 必须先修编码再进 alt-screen：框线字符写不出去的话，第一帧就崩
+        ensure_utf8()
         self._enter()
         self._active = True
         self._thread = threading.Thread(target=self._tick, daemon=True)
