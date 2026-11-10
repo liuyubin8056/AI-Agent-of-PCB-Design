@@ -523,7 +523,7 @@ pcb-agent/
 │   ├── textutil.py              否定词检测（规则兜底用）
 │   ├── agents/                  analyst / designer / critic
 │   └── ui/                      tui.py（终端界面）/ streamlit_app.py（可选网页）
-└── tests/                       152 个用例（含 KiCad / ngspice 集成测试，未装自动跳过）
+└── tests/                       156 个用例（含 KiCad / ngspice 集成测试，未装自动跳过）
 ```
 
 ---
@@ -536,10 +536,58 @@ pcb-agent/
 git clone https://github.com/liuyubin8056/AI-Agent-of-PCB-Design.git
 cd AI-Agent-of-PCB-Design
 
-python -m pip install -e ".[dev]"     # 或直接 PYTHONPATH=src 运行
+python -m pip install -e ".[dev]"
 python -m pcb_agent --demo            # 零配置跑通全流程
-python -m pytest -q                   # 54 passed
+python -m pytest -q                   # 156 passed
 ```
+
+### 命令在哪个目录执行
+
+**必须在项目根目录执行**——就是含 `pyproject.toml` 的那一层（克隆下来叫
+`AI-Agent-of-PCB-Design/`，本文档写作时本地目录名是 `pcb-agent/`）。
+因为项目用的是 `src/` 布局：没安装时 Python 找不到 `pcb_agent` 包，
+会直接报 `No module named pcb_agent`。
+
+装一次之后就没有这个限制了。`pip install -e .` 把包链接进当前 Python 环境，
+之后**任意目录**都能跑：
+
+```bash
+python -m pcb_agent --demo --out /tmp/mydesign
+```
+
+要注意两类路径的基准并不相同：
+
+| 路径 | 基准 | 说明 |
+|---|---|---|
+| `data/symbols.json`、`.env` | **项目根**（用 `__file__` 定位） | 换目录跑也能找到，不用改配置 |
+| `runs/<时间戳>/`（默认输出） | **当前工作目录** | 在哪执行就落在哪 |
+
+所以产物找不到时，先看是不是在别的目录跑过；想固定位置就加 `--out`。
+
+不安装、只想临时跑一次时，按所用 shell 选一种：
+
+```bash
+# Git Bash / macOS / Linux
+cd "路径/到/pcb-agent"
+PYTHONPATH=src python -m pcb_agent --demo --tui
+```
+
+```bat
+:: cmd.exe
+cd /d "路径\到\pcb-agent"
+set PYTHONPATH=src
+python -m pcb_agent --demo --tui
+```
+
+```text
+# Windows PowerShell
+cd "路径\到\pcb-agent"
+$env:PYTHONPATH = "src"
+python -m pcb_agent --demo --tui
+```
+
+`pip install -e .` 顺带会装一个 `pcb-agent` 命令，但它落在 Python 的
+`Scripts/` 目录下，**不一定在 PATH 里**；`python -m pcb_agent` 永远可用，推荐用它。
 
 装了 KiCad 之后不用改配置：`KiCadGate` 会读注册表
 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` 下的 `DisplayName` / `InstallLocation`
