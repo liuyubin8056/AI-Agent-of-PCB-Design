@@ -12,6 +12,7 @@ Python 在中文 Windows 上默认用 GBK 编码 stdout，后果有两层：
 
 from __future__ import annotations
 
+import ctypes
 import os
 import sys
 
@@ -44,14 +45,47 @@ def ensure_utf8() -> bool:
 
     if os.name == "nt":
         try:
-            import ctypes
-
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleOutputCP(65001)
             kernel32.SetConsoleCP(65001)
+            _enable_vt(kernel32)
             changed = True
         except Exception:  # noqa: BLE001 - 没有控制台（如 pythonw）时正常失败
             pass
 
     _APPLIED = True
     return changed
+
+
+# Windows 控制台的 ANSI 转义默认是关的（老 conhost）。不打开的话，
+# 界面里的 \x1b[36m 会原样显示成 "←[36m"，比乱码更难读。
+_STD_OUTPUT_HANDLE = -11
+_ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+
+
+def _enable_vt(kernel32) -> bool:
+    """打开 stdout 的 VT 处理。已经是开的就返回 False。
+
+    显式声明参数/返回类型：句柄在 64 位下是 8 字节，按 ctypes 默认的
+    ``c_int`` 取会被截断，SetConsoleMode 就会作用到错误的句柄上。
+    """
+    kernel32.GetStdHandle.argtypes = [ctypes.c_uint32]
+    kernel32.GetStdHandle.restype = ctypes.c_void_p
+    kernel32.GetConsoleMode.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    kernel32.GetConsoleMode.restype = ctypes.c_int
+    kernel32.SetConsoleMode.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+    kernel32.SetConsoleMode.restype = ctypes.c_int
+
+    handle = kernel32.GetStdHandle(_STD_OUTPUT_HANDLE)
+    if not handle or handle == ctypes.c_void_p(-1).value:
+        return False
+    mode = ctypes.c_uint32()
+    if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+        return False
+    if mode.value & _ENABLE_VIRTUAL_TERMINAL_PROCESSING:
+        return False
+    return bool(
+        kernel32.SetConsoleMode(
+            handle, mode.value | _ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        )
+    )
