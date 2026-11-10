@@ -97,6 +97,7 @@ class Orchestrator:
         self.sim = Simulator(self.settings, self.lib)
         self.last_sim: SimReport | None = None
         self.tracer: Tracer | None = None
+        self._subscribers: list = []
         self.analyst = AnalystAgent(llm=self.llm, lib=self.lib)
         self.designer = DesignerAgent(llm=self.llm, lib=self.lib)
         self.critic = CriticAgent(llm=self.llm, lib=self.lib)
@@ -108,9 +109,51 @@ class Orchestrator:
 
     def _bind_tracer(self, out_dir: Path) -> None:
         self.tracer = Tracer(out_dir)
+        for callback in self._subscribers:
+            self.tracer.subscribe(callback)
         self.analyst.tracer = self.tracer
         self.designer.tracer = self.tracer
         self.critic.tracer = self.tracer
+
+    # ------------------------------------------------------------------ #
+    def on_event(self, callback) -> None:
+        """订阅执行事件（终端界面、进度上报）。
+
+        重新绑定 tracer（design/revise 各自有输出目录）后仍会继续收到事件，
+        所以订阅者记在 Orchestrator 上，绑定新 tracer 时重新挂一遍。
+        """
+        self._subscribers.append(callback)
+        if self.tracer is not None:
+            self.tracer.subscribe(callback)
+
+    def _step(self, phase: str, status: str = "begin", **payload) -> None:
+        if self.tracer is None:
+            return
+        self.tracer.event("step", phase=phase, status=status, **payload)
+
+    def _evaluate_step(self, ir: DesignIR, round_no: int, target: Path):
+        """包一层 evaluate，方便界面看到「这一轮校验的输入与结果」。"""
+        self._step(
+            "evaluate", "begin", round=round_no,
+            input={"轮次": round_no, "器件": len(ir.bom), "网络": len(ir.nets)},
+        )
+        started = time.perf_counter()
+        issues, artifacts = self._evaluate(ir, round_no, target)
+        errors = sum(1 for i in issues if i.severity == ERROR)
+        warnings = len(issues) - errors
+        self._step(
+            "evaluate", "end",
+            elapsed=round(time.perf_counter() - started, 3),
+            warn=warnings > 0,
+            output={
+                "错误": errors,
+                "警告": warnings,
+                "问题码": sorted({i.code for i in issues if i.severity == ERROR}) or ["无"],
+                "产物": len(artifacts),
+            },
+            notes=[str(i) for i in issues if i.severity == ERROR][:3],
+        )
+        return issues, artifacts
 
     # ------------------------------------------------------------------ #
     def design(
@@ -124,19 +167,52 @@ class Orchestrator:
         self._bind_tracer(target)
 
         t0 = time.perf_counter()
+        self._step("analyze", "begin", input={"需求": request})
+        started = time.perf_counter()
         spec = self.analyst.analyze(request, round_no=1)
+        self._step(
+            "analyze", "end",
+            elapsed=round(time.perf_counter() - started, 3),
+            output={
+                "板卡": spec.title,
+                "功能": spec.functions[:5],
+                "接口": spec.interfaces[:5],
+                "电源轨": spec.supply_rails[:4],
+            },
+        )
+
+        self._step("design", "begin", input={"功能": spec.functions[:5]})
+        started = time.perf_counter()
         ir = self.designer.design(spec, [], round_no=1, raw_request=request)
+        self._step(
+            "design", "end",
+            elapsed=round(time.perf_counter() - started, 3),
+            output={
+                "器件": len(ir.bom),
+                "网络": len(ir.nets),
+                "连接点": sum(len(n.members) for n in ir.nets),
+                "子电路": ir.meta.get("subcircuits") or [],
+                "选型来源": ir.meta.get("selection_source") or "规则",
+            },
+        )
 
         log: list[str] = []
         if inject_fault:
+            self._step("inject", "begin", input={"类型": inject_fault})
             ir, fault_log = self.inject_fault(ir, inject_fault)
+            self._step("inject", "end", warn=True, output={"日志": fault_log[:2]})
             log.extend(fault_log)
             if self.tracer:
                 self.tracer.event("inject_fault", fault=inject_fault, log=fault_log)
 
         ir, issues, artifacts, rounds = self._repair(ir, target, log, start_round=1)
 
+        self._step("finalize", "begin")
         final = self._write_final(ir, target, artifacts)
+        self._step(
+            "finalize", "end",
+            output={"产物": len(final), "原理图": Path(final.get("原理图", "")).name},
+        )
         self._publish_live(final, log)
         elapsed = round(time.perf_counter() - t0, 2)
 
@@ -173,15 +249,37 @@ class Orchestrator:
 
         while rounds - start_round + 1 < self.settings.max_rounds:
             rounds += 1
-            issues, artifacts = self._evaluate(ir, rounds, target)
+            issues, artifacts = self._evaluate_step(ir, rounds, target)
             dirty = False
             if not any(i.severity == ERROR for i in issues):
                 break
+            self._step(
+                "critic", "begin", round=rounds,
+                input={"错误": [i.code for i in issues if i.severity == ERROR][:5]},
+            )
+            started = time.perf_counter()
             ops = self.critic.review(ir, issues, round_no=rounds)
+            self._step(
+                "critic", "end",
+                elapsed=round(time.perf_counter() - started, 3),
+                ok=True,
+                output={"补丁": len(ops), "操作": [o.op for o in ops][:6]},
+            )
             if not ops:
                 log.append(f"第 {rounds} 轮评审未能给出可执行补丁，提前结束")
                 break
+
+            self._step("patch", "begin", input={"补丁": len(ops)})
+            started = time.perf_counter()
             res = apply(ir, ops, self.lib)
+            self._step(
+                "patch", "end",
+                elapsed=round(time.perf_counter() - started, 3),
+                ok=res.applied > 0,
+                warn=res.rejected > 0,
+                output={"应用": res.applied, "拒绝": res.rejected},
+                notes=res.log[:3],
+            )
             ir = res.ir
             log.extend(res.log)
             log.extend(self.critic.unfixable)
@@ -193,7 +291,7 @@ class Orchestrator:
         if dirty:
             # 最后一轮应用过补丁但还没评估，补一次以拿到真实状态
             rounds += 1
-            issues, artifacts = self._evaluate(ir, rounds, target)
+            issues, artifacts = self._evaluate_step(ir, rounds, target)
         return ir, issues, artifacts, rounds
 
     # ------------------------------------------------------------------ #
@@ -209,9 +307,11 @@ class Orchestrator:
         if self.tracer is None:
             self._bind_tracer(target)
 
+        self._step("revise", "begin", input={"要求": request})
         ops = self._ops_for_revise(ir, request)
+        self._step("revise", "end", output={"操作": [o.op for o in ops][:6], "条数": len(ops)})
         if not ops:
-            issues, artifacts = self._evaluate(ir, 1, target)
+            issues, artifacts = self._evaluate_step(ir, 1, target)
             return RunResult(request, ir.spec, ir, issues, 0, artifacts,
                              ["未能从修改要求中解析出任何操作"], self.mode)
 

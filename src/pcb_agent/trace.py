@@ -10,19 +10,27 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass
 class Tracer:
     out_dir: Path
     events: list[dict[str, Any]] = field(default_factory=list)
+    subscribers: list[Callable[[dict[str, Any]], None]] = field(default_factory=list)
     _t0: float = field(default_factory=time.perf_counter)
 
     def __post_init__(self) -> None:
         self.out_dir = Path(self.out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.path = self.out_dir / "trace.jsonl"
+
+    def subscribe(self, callback: Callable[[dict[str, Any]], None]) -> None:
+        """注册实时订阅者（终端界面、进度条等）。
+
+        订阅者出错不能影响主流程：界面是观察者，不是参与者。
+        """
+        self.subscribers.append(callback)
 
     def event(self, kind: str, **payload: Any) -> dict[str, Any]:
         record = {
@@ -33,6 +41,11 @@ class Tracer:
         self.events.append(record)
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        for callback in list(self.subscribers):
+            try:
+                callback(record)
+            except Exception:  # noqa: BLE001 - 观察者异常不得中断设计流程
+                pass
         return record
 
     def node(self, name: str, round_no: int = 0, **payload: Any) -> None:

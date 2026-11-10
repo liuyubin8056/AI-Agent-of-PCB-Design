@@ -63,11 +63,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="顺带生成 .kicad_pcb 并自动布线（含 DRC）",
     )
     parser.add_argument(
+        "--tui",
+        choices=["auto", "on", "off"],
+        default="auto",
+        help="终端界面：auto=有 TTY 才开（默认），on=强制，off=纯文本",
+    )
+    parser.add_argument(
         "--live",
         action="store_true",
         help="用 KiCad IPC 后端：把原理图推进正在运行的 KiCad（需开启 IPC API）",
     )
     return parser
+
+
+def _run_once(args, orch: Orchestrator, out_dir: Path) -> RunResult:
+    """真正跑一次设计/修订。界面与纯文本两条路径共用。"""
+    if args.from_json:
+        from .ir import DesignIR
+
+        ir = DesignIR.load_json(args.from_json)
+        request = args.revise or "载入已有设计"
+        return orch.revise(ir, request, out_dir)
+
+    request = args.request or (DEMO_REQUEST if args.demo else "")
+    if not request:
+        raise SystemExit("请给出一句话需求，或使用 --demo")
+    result = orch.design(request, out_dir, inject_fault=args.inject_fault)
+    if args.revise:
+        result = orch.revise(result.ir, args.revise, out_dir / "revision")
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -78,29 +102,53 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = Path(args.out) if args.out else _default_out()
 
     orch = Orchestrator(settings=settings, out_dir=out_dir)
-    print(f"LLM 后端：{settings.describe()}")
-    print(f"kicad-cli：{'可用' if orch.gate.available else '未安装（跳过网表/ERC 校验）'}")
-    print(f"KiCad 后端：{settings.kicad_backend}")
-    if settings.kicad_backend == "live":
-        print(f"  {orch.live.status().describe()}")
-    print(f"输出目录：{out_dir.resolve()}")
 
-    if args.from_json:
-        from .ir import DesignIR
+    from .ui.tui import Tui
+    from .ui.tui import supported as tui_supported
 
-        ir = DesignIR.load_json(args.from_json)
-        request = args.revise or "载入已有设计"
-        result = orch.revise(ir, request, out_dir)
+    use_tui = False
+    if args.tui == "on":
+        # 没有真终端时交给 alt-screen 只会污染管道输出，宁可降级
+        if sys.stdout.isatty():
+            use_tui = True
+        else:
+            print("提示：当前不是交互终端，--tui on 已降级为文本输出", file=sys.stderr)
+    elif args.tui == "auto":
+        use_tui = tui_supported()
+    if args.json:  # JSON 输出必须保持可解析，不能被界面接管
+        use_tui = False
+
+    subtitle = (
+        f"{settings.describe()}  ·  kicad {settings.kicad_backend}"
+        f"（{'可用' if orch.gate.available else '未装'}）"
+        f"  ·  仿真 {'可用' if orch.sim.available else '未装'}"
+        f"  ·  {out_dir}"
+    )
+    tui = None
+    if use_tui:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tui = Tui(
+            title="PCB-Agent 电路板设计",
+            subtitle=subtitle,
+            max_rounds=settings.max_rounds,
+            snapshot_path=str(out_dir / "ui-frame.txt"),
+        )
+        orch.on_event(tui.feed)
+        tui.start()
     else:
-        request = args.request or (DEMO_REQUEST if args.demo else "")
-        if not request:
-            print("请给出一句话需求，或使用 --demo", file=sys.stderr)
-            return 2
-        result = orch.design(request, out_dir, inject_fault=args.inject_fault)
-        if args.revise:
-            result = orch.revise(
-                result.ir, args.revise, out_dir / "revision"
-            )
+        print(f"LLM 后端：{settings.describe()}")
+        print(f"kicad-cli：{'可用' if orch.gate.available else '未安装（跳过网表/ERC 校验）'}")
+        print(f"KiCad 后端：{settings.kicad_backend}")
+        if settings.kicad_backend == "live":
+            print(f"  {orch.live.status().describe()}")
+        print(f"输出目录：{out_dir.resolve()}")
+
+    try:
+        result = _run_once(args, orch, out_dir)
+    finally:
+        if tui is not None:
+            tui.stop()
+
 
     if args.sim and orch.last_sim is not None:
         from .simulate import summarize
