@@ -523,7 +523,7 @@ pcb-agent/
 │   ├── textutil.py              否定词检测（规则兜底用）
 │   ├── agents/                  analyst / designer / critic
 │   └── ui/                      tui.py（终端界面）/ streamlit_app.py（可选网页）
-└── tests/                       156 个用例（含 KiCad / ngspice 集成测试，未装自动跳过）
+└── tests/                       158 个用例（KiCad / ngspice / 真实控制台相关用例，环境不满足时自动跳过）
 ```
 
 ---
@@ -538,7 +538,7 @@ cd AI-Agent-of-PCB-Design
 
 python -m pip install -e ".[dev]"
 python -m pcb_agent --demo            # 零配置跑通全流程
-python -m pytest -q                   # 156 passed
+python -m pytest -q                   # 157 passed, 1 skipped
 ```
 
 ### 命令在哪个目录执行
@@ -588,6 +588,27 @@ python -m pcb_agent --demo --tui
 
 `pip install -e .` 顺带会装一个 `pcb-agent` 命令，但它落在 Python 的
 `Scripts/` 目录下，**不一定在 PATH 里**；`python -m pcb_agent` 永远可用，推荐用它。
+
+### 装到了别的 Python 上会怎样
+
+机器上常有多个 Python（系统 Python、conda、IDE 或工具自带的）。`pip install -e .`
+只装进**当前 `python` 对应的那个环境**，换个解释器就看不到。典型症状：
+
+```
+PS ...\pcb-agent> python -m pcb_agent --demo --tui
+... Python313\python.exe: No module named pcb_agent
+```
+
+可能你在 A 解释器装的、却用 B 解释器跑。先确认工具链是不是同一个：
+
+```bash
+python -c "import sys; print(sys.executable)"
+python -c "import pcb_agent; print(pcb_agent.__file__)"
+```
+
+两条命令的输出如果在不同的 Python 安装目录下，就说明装错了环境——用
+`python -m pip install -e ".[dev]"` 重装一次即可（关键是用**同一个** `python`）。
+`pytest` 也一样：`python -m pytest` 比裸 `pytest` 安全，后者可能是别的环境里的脚本。
 
 装了 KiCad 之后不用改配置：`KiCadGate` 会读注册表
 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` 下的 `DisplayName` / `InstallLocation`
